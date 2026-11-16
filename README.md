@@ -4,7 +4,7 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 
 - **Website**: `index.html`, gehost op GitHub Pages
 - **Database en login**: Supabase-project `vergaderruimtes` (eu-central-1)
-- **Ruimte uitnodigen via Outlook**: elke ruimte heeft een eigen adres, bijvoorbeeld `vergaderruimtes.smh+keet@gmail.com`. Een Google Apps Script controleert de mailbox elke 5 minuten. Het script boekt de uitnodiging en stuurt een acceptatie of weigering terug.
+- **Ruimte uitnodigen via Outlook**: elke ruimte heeft een eigen adres, bijvoorbeeld `vergaderruimtes.smh+keet@gmail.com`. Een Google Apps Script controleert de mailbox elke minuut. Het script boekt de uitnodiging en stuurt een acceptatie of weigering terug.
 
 ## Wat de site kan
 
@@ -44,7 +44,7 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 2. Plak de inhoud van `Code.gs`. Gebruik de versie **met sleutel** die je apart hebt gekregen. Zet die versie niet op GitHub.
 3. Zet bij *Projectinstellingen* het vinkje aan bij *"appsscript.json weergeven in editor"*. Plak dan de inhoud van `appsscript.json` in dat bestand.
 4. Kies bovenaan de functie `testVerbinding` en klik op **Uitvoeren**. Geef toestemming. Bij "Google heeft deze app niet geverifieerd" klik je op Geavanceerd → Ga naar Vergaderruimtes. In het logboek moet `{"status":"unknown_room"}` verschijnen.
-5. Kies daarna de functie `installeer` en klik op **Uitvoeren**. Vanaf dat moment wordt de mailbox elke 5 minuten gecontroleerd.
+5. Kies daarna de functie `installeer` en klik op **Uitvoeren**. Vanaf dat moment wordt de mailbox elke minuut gecontroleerd.
 
 ### 5. Deelnemers toevoegen
 Log in op de site en ga naar *Beheer → Projectdeelnemers*. Voeg de e-mailadressen toe en stuur de mensen de link naar de site.
@@ -64,4 +64,4 @@ Log in op de site en ga naar *Beheer → Projectdeelnemers*. Voeg de e-mailadres
 ## Gratis limieten
 - Supabase Free: ruim voldoende. Een project dat 7 dagen niet wordt gebruikt, wordt gepauzeerd. Het script stuurt daarom elke dag een ping om dat te voorkomen.
 - Gmail SMTP: circa 500 mails per dag.
-- Apps Script: een run elke 5 minuten blijft ruim binnen de gratis quota.
+- Apps Script: een run elke minuut blijft ruim binnen de gratis quota.

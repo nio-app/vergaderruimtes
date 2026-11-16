@@ -21,11 +21,11 @@ const CONFIG = {
 /** Eén keer uitvoeren: maakt de 5-minuten-trigger aan. */
 function installeer() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('verwerkUitnodigingen').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('verwerkUitnodigingen').timeBased().everyMinutes(1).create();
   ScriptApp.newTrigger('houdWakker').timeBased().everyDays(1).atHour(6).create();
   GmailApp.createLabel(CONFIG.LABEL);
   verwerkUitnodigingen();
-  Logger.log('Klaar: de mailbox wordt nu elke 5 minuten gecontroleerd.');
+  Logger.log('Klaar: de mailbox wordt nu elke minuut gecontroleerd.');
 }
 
 /** Hoofdfunctie, draait elke 5 minuten. */
