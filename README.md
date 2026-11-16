@@ -12,6 +12,7 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 - *Mijn reserveringen*: je eigen boekingen wijzigen of verwijderen.
 - *Ruimtes*: de e-mailadressen om de ruimtes in Outlook uit te nodigen.
 - *Beheer* (alleen voor beheerders): deelnemers toevoegen of verwijderen, ruimtes beheren en het Gmail-adres instellen.
+- *Agenda-abonnement*: elke deelnemer krijgt onder *Ruimtes* een persoonlijke iCal-link voor alle ruimtes of één ruimte. Die voeg je toe in Outlook, Google Agenda of op je iPhone. De link wordt geserveerd door de Edge Function `agenda`.
 - *Scherm-modus* (`?scherm=1`): laat op een scherm in de keet per ruimte zien of die vrij of bezet is.
 
 ## Eenmalige installatie
