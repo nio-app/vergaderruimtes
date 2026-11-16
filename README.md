@@ -8,6 +8,8 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 
 ## Wat de site kan
 
+- Inloggen: de eerste keer met een link per mail, daarna met e-mailadres en wachtwoord. Het wachtwoord stel je in via *Wachtwoord* rechtsboven.
+
 - Dagplanning per ruimte: klik op een vrij tijdslot om te reserveren. Dubbele boekingen zijn onmogelijk, dat bewaakt de database zelf.
 - *Mijn reserveringen*: je eigen boekingen wijzigen of verwijderen.
 - *Ruimtes*: de e-mailadressen om de ruimtes in Outlook uit te nodigen.
@@ -60,7 +62,7 @@ Log in op de site en ga naar *Beheer → Projectdeelnemers*. Voeg de e-mailadres
 | Terugkerende vergadering | Dagelijks, wekelijks en maandelijks worden ondersteund, tot maximaal 104 keer of 1 jaar vooruit. |
 | Organisator niet op de deelnemerslijst | Weigering. |
 
-**Beperking:** als je in Outlook één los exemplaar van een reeks wijzigt, wordt alleen de reeks als geheel verwerkt. Zo'n losse wijziging pas je aan op de site.
+Ook één los exemplaar van een reeks verplaatsen of annuleren in Outlook wordt goed verwerkt. De rest van de reeks blijft dan staan.
 
 ## Gratis limieten
 - Supabase Free: ruim voldoende. Een project dat 7 dagen niet wordt gebruikt, wordt gepauzeerd. Het script stuurt daarom elke dag een ping om dat te voorkomen.

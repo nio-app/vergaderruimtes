@@ -91,7 +91,9 @@ function verwerkBericht(message, me) {
     sequence: parseInt(val(ev, 'SEQUENCE') || '0', 10),
     organizer_email: organizerEmail,
     organizer_name: organizerName,
-    title: unescapeText(val(ev, 'SUMMARY') || 'Overleg')
+    title: unescapeText(val(ev, 'SUMMARY') || 'Overleg'),
+    // los exemplaar van een terugkerende vergadering (verplaatst of geannuleerd)
+    recurrence_id: first(ev.props['RECURRENCE-ID']) ? parseIcsDate(first(ev.props['RECURRENCE-ID'])).toISOString() : null
   };
   const occurrences = method === 'REQUEST' ? berekenTijden(ev) : [];
 

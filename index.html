@@ -105,6 +105,7 @@
 <header id="topbar" class="hidden">
   <h1><span>■</span> <span id="siteTitle" style="color:inherit">Vergaderruimtes</span></h1>
   <span class="muted" id="whoami"></span>
+  <button class="link" id="pwBtn">Wachtwoord</button>
   <button class="link" id="logoutBtn">Uitloggen</button>
 </header>
 <nav id="tabs" class="hidden">
@@ -119,11 +120,18 @@
   <!-- LOGIN -->
   <section id="login" class="card hidden">
     <h2>Inloggen</h2>
-    <p class="muted">Vul het e-mailadres in waarmee je bent uitgenodigd. Je krijgt een mail met een inloglink.</p>
+    <form id="pwForm">
+      <label for="pwEmail">E-mailadres</label>
+      <input id="pwEmail" type="email" required autocomplete="username" placeholder="naam@bedrijf.nl">
+      <label for="pwPass">Wachtwoord</label>
+      <input id="pwPass" type="password" required autocomplete="current-password">
+      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Inloggen</button></div>
+    </form>
+    <p class="muted" style="margin-top:18px">Eerste keer, of wachtwoord vergeten? Log in met een link per mail en stel daarna (opnieuw) een wachtwoord in.</p>
     <form id="loginForm">
       <label for="loginEmail">E-mailadres</label>
       <input id="loginEmail" type="email" required autocomplete="email" placeholder="naam@bedrijf.nl">
-      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Stuur inloglink</button></div>
+      <div style="margin-top:12px"><button type="submit" style="width:100%">Stuur inloglink</button></div>
     </form>
     <form id="codeForm" class="hidden" style="margin-top:14px">
       <label for="loginCode">Of vul de code uit de mail in</label>
@@ -136,6 +144,11 @@
     <h2>Geen toegang</h2>
     <p>Je bent ingelogd, maar dit e-mailadres staat (nog) niet op de lijst van projectdeelnemers. Vraag de beheerder om je toe te voegen.</p>
   </section>
+
+  <div id="pwBanner" class="card hidden" style="border-color:#f5c2c9;background:#fff5f6">
+    <b>Stel een wachtwoord in</b> — dan kun je de volgende keer inloggen zonder op een mail te wachten.
+    <div class="row" style="margin-top:8px"><button class="primary" id="pwBannerBtn">Wachtwoord instellen</button><button class="link" id="pwBannerLater">Later</button></div>
+  </div>
 
   <!-- PLANNING -->
   <section id="tab-planning" class="tab hidden">
@@ -265,6 +278,26 @@
   </div>
 </div>
 
+<!-- PASSWORD MODAL -->
+<div class="overlay hidden" id="pwModal">
+  <div class="modal">
+    <h3>Wachtwoord instellen</h3>
+    <p class="muted">Minimaal 8 tekens. Hiermee log je voortaan in met je e-mailadres en wachtwoord.</p>
+    <form id="pwSetForm">
+      <input type="email" id="pwSetUser" autocomplete="username" class="hidden">
+      <label for="pwNew">Nieuw wachtwoord</label>
+      <input id="pwNew" type="password" minlength="8" required autocomplete="new-password">
+      <label for="pwNew2">Herhaal wachtwoord</label>
+      <input id="pwNew2" type="password" minlength="8" required autocomplete="new-password">
+      <div id="pwSetMsg"></div>
+      <div class="row" style="margin-top:14px"><div class="grow"></div>
+        <button type="button" id="pwCancel">Sluiten</button>
+        <button type="submit" class="primary">Opslaan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ROOM MODAL -->
 <div class="overlay hidden" id="roomModal">
   <div class="modal">
@@ -370,6 +403,44 @@ $('codeForm').addEventListener('submit', async (e) => {
 
 $('logoutBtn').addEventListener('click', () => sb.auth.signOut());
 
+$('pwForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  msg('loginMsg', '');
+  const email = $('pwEmail').value.trim().toLowerCase();
+  const { error } = await sb.auth.signInWithPassword({ email, password: $('pwPass').value });
+  if (error) {
+    if (/invalid login credentials/i.test(error.message))
+      msg('loginMsg', 'E-mailadres of wachtwoord klopt niet. Nog geen wachtwoord ingesteld? Gebruik dan eerst de inloglink per mail.');
+    else msg('loginMsg', error.message);
+    $('loginEmail').value = email;
+  }
+});
+
+function openPwModal() {
+  msg('pwSetMsg', ''); $('pwNew').value = ''; $('pwNew2').value = ''; $('pwSetUser').value = state.email;
+  show('pwModal'); setTimeout(() => $('pwNew').focus(), 50);
+}
+$('pwBtn').onclick = openPwModal;
+$('pwBannerBtn').onclick = openPwModal;
+$('pwBannerLater').onclick = () => { show('pwBanner', false); try { localStorage.setItem('pwLater', '1'); } catch {} };
+$('pwCancel').onclick = () => show('pwModal', false);
+$('pwSetForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = $('pwNew').value;
+  if (pw.length < 8) return msg('pwSetMsg', 'Gebruik minimaal 8 tekens.');
+  if (pw !== $('pwNew2').value) return msg('pwSetMsg', 'De wachtwoorden zijn niet gelijk.');
+  const { error } = await sb.auth.updateUser({ password: pw, data: { has_password: true } });
+  if (error) {
+    if (/reauthenticat|nonce/i.test(error.message)) return msg('pwSetMsg', 'Log opnieuw in via de link per mail en probeer het direct daarna nog eens.');
+    if (/same|different from the old/i.test(error.message)) return msg('pwSetMsg', 'Dit is al je huidige wachtwoord.');
+    if (/weak|short|characters/i.test(error.message)) return msg('pwSetMsg', 'Dit wachtwoord is te zwak. Kies een langer of minder voor de hand liggend wachtwoord.');
+    return msg('pwSetMsg', error.message);
+  }
+  msg('pwSetMsg', 'Wachtwoord opgeslagen. Voortaan kun je inloggen met je e-mailadres en wachtwoord.', true);
+  show('pwBanner', false);
+  setTimeout(() => show('pwModal', false), 1500);
+});
+
 async function start(session) {
   state.user = session.user;
   state.email = (session.user.email || '').toLowerCase();
@@ -384,6 +455,8 @@ async function start(session) {
   show('topbar'); show('tabs');
   $('whoami').textContent = memberName(state.email);
   show('adminTabBtn', state.isAdmin);
+  let later = false; try { later = localStorage.getItem('pwLater') === '1'; } catch {}
+  show('pwBanner', !session.user.user_metadata?.has_password && !later);
   switchTab('planning');
   setInterval(() => { if (!document.hidden && currentTab === 'planning') loadDay(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadDay(); });
