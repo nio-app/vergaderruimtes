@@ -46,7 +46,9 @@
   .toolbar .date-title { font-weight: 600; font-size: 16px; flex: 1; min-width: 180px; }
   .toolbar .date-title::first-letter { text-transform: uppercase; }
   .toolbar input[type=date] { width: auto; }
-  .planner { display: flex; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
+  .planner { display: flex; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; max-height: calc(100vh - 230px); min-height: 420px; align-items: flex-start; }
+  .timecol .colhead { z-index: 6; }
+  .colhead { z-index: 6; }
   .timecol { flex: 0 0 52px; border-right: 1px solid var(--line); }
   .colhead { height: 52px; border-bottom: 1px solid var(--line); padding: 6px 8px; font-weight: 600; font-size: 14px; position: sticky; top: 0; background: #fff; }
   .colhead small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
@@ -244,11 +246,11 @@
       <select id="bRoom" required></select>
       <label for="bTitle">Onderwerp</label>
       <input id="bTitle" required placeholder="bijv. Bouwvergadering">
-      <label for="bDate">Datum</label>
-      <input id="bDate" type="date" required>
       <div class="two">
-        <div><label for="bStart">Van</label><input id="bStart" type="time" step="900" required></div>
-        <div><label for="bEnd">Tot</label><input id="bEnd" type="time" step="900" required></div>
+        <div><label for="bDate">Van (datum)</label><input id="bDate" type="date" required></div>
+        <div><label for="bStart">Van (tijd)</label><input id="bStart" type="time" step="900" required></div>
+        <div><label for="bEndDate">Tot (datum)</label><input id="bEndDate" type="date" required></div>
+        <div><label for="bEnd">Tot (tijd)</label><input id="bEnd" type="time" step="900" required></div>
       </div>
       <label for="bNotes">Opmerking (optioneel)</label>
       <textarea id="bNotes" rows="2"></textarea>
@@ -291,8 +293,9 @@
 // ===== Configuratie =====
 const SUPABASE_URL = 'https://usvpblwyejmewgnfhulb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_oXM5qHIc0RGQw1lV3F7Frw_ZyTM_ySo';
-const DAY_START = 7;   // eerste uur in de planning
-const DAY_END = 20;    // laatste uur in de planning
+const DAY_START = 0;   // planning loopt 24 uur
+const DAY_END = 24;
+const SCROLL_TO_HOUR = 7; // waar de planning standaard naartoe scrolt
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = (id) => document.getElementById(id);
@@ -421,7 +424,7 @@ $('nextDay').onclick = () => { state.day = addDays(state.day, 1); loadDay(); };
 $('todayBtn').onclick = () => { state.day = startOfDay(new Date()); loadDay(); };
 $('datePick').onchange = (e) => { if (e.target.value) { state.day = startOfDay(new Date(e.target.value + 'T00:00')); loadDay(); } };
 $('newBookingBtn').onclick = () => {
-  const now = new Date(); let h = Math.max(DAY_START, now.getHours() + 1);
+  const now = new Date(); let h = Math.min(22, now.getHours() + 1);
   if (ymd(state.day) !== ymd(now)) h = 9;
   openBooking(null, { roomId: activeRooms()[0]?.id, date: state.day, start: `${pad(h)}:00`, end: `${pad(h+1)}:00` });
 };
@@ -470,13 +473,20 @@ function renderPlanner() {
     html += '</div></div>';
   }
   $('planner').innerHTML = html;
+  if (state.scrolledDay !== ymd(state.day)) {
+    state.scrolledDay = ymd(state.day);
+    const isToday = ymd(state.day) === ymd(new Date());
+    const h = isToday ? Math.max(0, Math.min(new Date().getHours() - 1, SCROLL_TO_HOUR)) : SCROLL_TO_HOUR;
+    $('planner').scrollTop = h * hourPx;
+  }
   $('planner').querySelectorAll('.slots').forEach(col => col.addEventListener('click', (ev) => {
     const bEl = ev.target.closest('.booking');
     if (bEl) { openBooking(state.bookings.find(b => b.id === bEl.dataset.id)); return; }
     const y = ev.clientY - col.getBoundingClientRect().top;
     let min = DAY_START * 60 + Math.floor(y / pxPerMin / 30) * 30;
-    const endMin = Math.min(DAY_END * 60, min + 60);
-    openBooking(null, { roomId: col.dataset.room, date: state.day, start: `${pad(Math.floor(min/60))}:${pad(min%60)}`, end: `${pad(Math.floor(endMin/60))}:${pad(endMin%60)}` });
+    const endMin = (min + 60) % (24 * 60);
+    openBooking(null, { roomId: col.dataset.room, date: state.day, endDate: min + 60 >= 24 * 60 ? addDays(state.day, 1) : state.day,
+      start: `${pad(Math.floor(min/60))}:${pad(min%60)}`, end: `${pad(Math.floor(endMin/60))}:${pad(endMin%60)}` });
   }));
 }
 
@@ -493,26 +503,27 @@ function openBooking(b, defaults = {}) {
     $('bmTitle').textContent = canEdit ? 'Reservering' : 'Reservering (alleen bekijken)';
     $('bmInfo').innerHTML = `Geboekt door <b>${esc(b.organizer_name || memberName(b.booked_by))}</b> (${esc(b.booked_by)})${viaMail ? ' via Outlook-uitnodiging. Wijzig of annuleer deze bij voorkeur in Outlook.' : ''}`;
     $('bRoom').value = b.room_id; $('bTitle').value = b.title; $('bDate').value = ymd(s);
-    $('bStart').value = hm(s); $('bEnd').value = hm(e); $('bNotes').value = b.notes || '';
+    $('bStart').value = hm(s); $('bEndDate').value = ymd(e); $('bEnd').value = hm(e); $('bNotes').value = b.notes || '';
   } else {
     $('bmTitle').textContent = 'Nieuwe reservering'; $('bmInfo').textContent = '';
     $('bRoom').value = defaults.roomId || rooms[0]?.id || ''; $('bTitle').value = '';
     $('bDate').value = ymd(defaults.date || state.day); $('bStart').value = defaults.start || '09:00';
-    $('bEnd').value = defaults.end || '10:00'; $('bNotes').value = '';
+    $('bEndDate').value = ymd(defaults.endDate || defaults.date || state.day); $('bEnd').value = defaults.end || '10:00'; $('bNotes').value = '';
   }
-  ['bRoom','bTitle','bDate','bStart','bEnd','bNotes'].forEach(id => $(id).disabled = !canEdit || viaMail);
+  ['bRoom','bTitle','bDate','bStart','bEndDate','bEnd','bNotes'].forEach(id => $(id).disabled = !canEdit || viaMail);
   show('bSave', canEdit && !viaMail);
   show('bDelete', !!b && canEdit);
   show('bookingModal');
   if (!b) setTimeout(() => $('bTitle').focus(), 50);
 }
 $('bCancel').onclick = () => show('bookingModal', false);
+$('bDate').addEventListener('change', () => { if (!$('bEndDate').value || $('bEndDate').value < $('bDate').value) $('bEndDate').value = $('bDate').value; });
 $('bookingModal').addEventListener('click', (e) => { if (e.target.id === 'bookingModal') show('bookingModal', false); });
 
 $('bookingForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const start = new Date(`${$('bDate').value}T${$('bStart').value}`);
-  const end = new Date(`${$('bDate').value}T${$('bEnd').value}`);
+  const end = new Date(`${$('bEndDate').value}T${$('bEnd').value}`);
   if (end <= start) return msg('bookingMsg', 'De eindtijd moet na de begintijd liggen.');
   const row = { room_id: $('bRoom').value, title: $('bTitle').value.trim(), start_at: start.toISOString(), end_at: end.toISOString(), notes: $('bNotes').value.trim() || null };
   const me = state.members.find(m => m.email === state.email);
