@@ -161,6 +161,27 @@
   <section id="tab-rooms" class="tab hidden">
     <div class="rooms-grid" id="roomsGrid"></div>
     <div class="card" style="margin-top:16px">
+      <h3 style="margin-top:0">Abonneren op de agenda</h3>
+      <p class="muted">Zie alle reserveringen in je eigen agenda (Outlook, Google Agenda, iPhone). De agenda werkt zichzelf bij; hoe vaak bepaalt je agenda-app (meestal elk uur, soms minder vaak).</p>
+      <label for="feedRoom">Welke ruimte?</label>
+      <select id="feedRoom"></select>
+      <label>Jouw persoonlijke link (niet delen)</label>
+      <div class="copy" style="align-items:center"><code id="feedUrl" style="flex:1;word-break:break-all;font-size:13px">…</code><button id="feedCopy">Kopieer</button></div>
+      <div class="row" style="margin-top:10px">
+        <a id="feedWebcal" href="#"><button type="button" class="primary">Toevoegen aan agenda</button></a>
+      </div>
+      <details style="margin-top:12px">
+        <summary class="muted" style="cursor:pointer">Hoe voeg ik dit toe?</summary>
+        <ul class="muted" style="line-height:1.7">
+          <li><b>Outlook (web / nieuw Outlook):</b> Agenda → Agenda toevoegen → Abonneren vanaf internet → plak de link.</li>
+          <li><b>Outlook (klassiek):</b> Agenda → Agenda toevoegen → Van internet → plak de link.</li>
+          <li><b>Google Agenda:</b> Andere agenda's → + → Via URL → plak de link.</li>
+          <li><b>iPhone:</b> tik op "Toevoegen aan agenda" hierboven, of Instellingen → Agenda → Accounts → Voeg account toe → Overig → Voeg agenda-abonnement toe.</li>
+        </ul>
+      </details>
+      <p class="muted">Lukt het abonneren bij jouw bedrijf niet, dan blokkeert jullie IT waarschijnlijk externe agenda's. Gebruik dan gewoon deze site.</p>
+    </div>
+    <div class="card" style="margin-top:16px">
       <h3 style="margin-top:0">Ruimte uitnodigen vanuit Outlook</h3>
       <ol class="muted" style="line-height:1.7">
         <li>Maak in Outlook een vergadering zoals je gewend bent.</li>
@@ -540,6 +561,33 @@ function renderRooms() {
     try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Gekopieerd'; } catch { prompt('Kopieer het adres:', b.dataset.copy); }
     setTimeout(() => b.textContent = 'Kopieer', 1500);
   });
+  setupFeed();
+}
+
+let feedToken = null;
+async function setupFeed() {
+  const sel = $('feedRoom');
+  if (!sel.options.length) {
+    sel.innerHTML = '<option value="">Alle ruimtes</option>' + activeRooms().map(r => `<option value="${esc(r.alias)}">${esc(r.name)}</option>`).join('');
+    sel.onchange = renderFeed;
+    $('feedCopy').onclick = async () => {
+      const url = $('feedUrl').textContent;
+      try { await navigator.clipboard.writeText(url); $('feedCopy').textContent = 'Gekopieerd'; } catch { prompt('Kopieer de link:', url); }
+      setTimeout(() => $('feedCopy').textContent = 'Kopieer', 1500);
+    };
+  }
+  if (!feedToken) {
+    const { data, error } = await sb.rpc('my_feed_token');
+    if (error) { $('feedUrl').textContent = 'Kon geen link maken: ' + error.message; return; }
+    feedToken = data;
+  }
+  renderFeed();
+}
+function renderFeed() {
+  const room = $('feedRoom').value;
+  const url = `${SUPABASE_URL}/functions/v1/agenda?token=${feedToken}${room ? '&ruimte=' + encodeURIComponent(room) : ''}`;
+  $('feedUrl').textContent = url;
+  $('feedWebcal').href = url.replace(/^https:/, 'webcal:');
 }
 
 // ===== Beheer =====
