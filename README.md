@@ -1,0 +1,67 @@
+# Vergaderruimtes
+
+Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die de beheerder heeft uitgenodigd kunnen inloggen. Dat doen ze met hun e-mailadres, zonder wachtwoord.
+
+- **Website**: `index.html`, gehost op GitHub Pages
+- **Database en login**: Supabase-project `vergaderruimtes` (eu-central-1)
+- **Ruimte uitnodigen via Outlook**: elke ruimte heeft een eigen adres, bijvoorbeeld `vergaderruimtes.smh+keet@gmail.com`. Een Google Apps Script controleert de mailbox elke 5 minuten. Het script boekt de uitnodiging en stuurt een acceptatie of weigering terug.
+
+## Wat de site kan
+
+- Dagplanning per ruimte: klik op een vrij tijdslot om te reserveren. Dubbele boekingen zijn onmogelijk, dat bewaakt de database zelf.
+- *Mijn reserveringen*: je eigen boekingen wijzigen of verwijderen.
+- *Ruimtes*: de e-mailadressen om de ruimtes in Outlook uit te nodigen.
+- *Beheer* (alleen voor beheerders): deelnemers toevoegen of verwijderen, ruimtes beheren en het Gmail-adres instellen.
+- *Scherm-modus* (`?scherm=1`): laat op een scherm in de keet per ruimte zien of die vrij of bezet is.
+
+## Eenmalige installatie
+
+### 1. Gmail-account voor de ruimtes
+1. Maak een Gmail-account aan, bijvoorbeeld `vergaderruimtes.smh@gmail.com`. Kies je een ander adres, pas het dan aan in *Beheer → Instellingen*.
+2. Zet tweestapsverificatie aan en maak een **app-wachtwoord** aan: Google-account → Beveiliging → App-wachtwoorden. Dit heb je nodig in stap 2.
+
+### 2. Supabase-instellingen (dashboard → project `vergaderruimtes`)
+1. Ga naar **Authentication → Emails → SMTP Settings** en zet *Custom SMTP* aan:
+   - Host `smtp.gmail.com`, poort `465`
+   - Gebruiker: het Gmail-adres, wachtwoord: het app-wachtwoord
+   - Afzender: het Gmail-adres, naam: `Vergaderruimtes`
+
+   Dit is nodig omdat Supabase zelf alleen inlogmails stuurt naar leden van je Supabase-team.
+2. Ga naar **Authentication → URL Configuration**:
+   - *Site URL*: `https://<jouw-github-naam>.github.io/vergaderruimtes/`
+   - Zet hetzelfde adres ook bij *Redirect URLs*.
+3. Optioneel: ga naar **Authentication → Emails → Magic Link** en zet de tekst in het Nederlands. Voeg `{{ .Token }}` toe, dan staat er ook een code in de mail. Die code kun je op de site invullen, wat handig is als de link op een andere computer opengaat.
+
+### 3. GitHub Pages
+1. Maak een **openbare** repository `vergaderruimtes` aan en zet `index.html` erin.
+2. Ga naar **Settings → Pages**, kies *Deploy from a branch*, dan `main` en `/ (root)`.
+3. Na ongeveer een minuut staat de site op `https://<jouw-github-naam>.github.io/vergaderruimtes/`.
+
+> In `index.html` staat alleen de *publishable key*. Die mag openbaar zijn: de database laat alleen ingelogde, uitgenodigde deelnemers iets zien. Dat is getest.
+
+### 4. Gmail-script (Apps Script)
+1. Log in met het ruimte-Gmailaccount op <https://script.google.com> en maak een **nieuw project**: *Vergaderruimtes*.
+2. Plak de inhoud van `Code.gs`. Gebruik de versie **met sleutel** die je apart hebt gekregen. Zet die versie niet op GitHub.
+3. Zet bij *Projectinstellingen* het vinkje aan bij *"appsscript.json weergeven in editor"*. Plak dan de inhoud van `appsscript.json` in dat bestand.
+4. Kies bovenaan de functie `testVerbinding` en klik op **Uitvoeren**. Geef toestemming. Bij "Google heeft deze app niet geverifieerd" klik je op Geavanceerd → Ga naar Vergaderruimtes. In het logboek moet `{"status":"unknown_room"}` verschijnen.
+5. Kies daarna de functie `installeer` en klik op **Uitvoeren**. Vanaf dat moment wordt de mailbox elke 5 minuten gecontroleerd.
+
+### 5. Deelnemers toevoegen
+Log in op de site en ga naar *Beheer → Projectdeelnemers*. Voeg de e-mailadressen toe en stuur de mensen de link naar de site.
+
+## Hoe het uitnodigen via Outlook werkt
+
+| Actie in Outlook | Resultaat |
+|---|---|
+| Ruimte als genodigde toevoegen | Is de ruimte vrij, dan volgt een acceptatie en een boeking. Is ze bezet, dan volgt een weigering met de reden en de botsende tijden. |
+| Vergadering verplaatsen | De boeking wordt aangepast. Als het nieuwe tijdstip bezet is, volgt een weigering en blijft de oude boeking staan. |
+| Vergadering annuleren of ruimte verwijderen | De boeking vervalt. |
+| Terugkerende vergadering | Dagelijks, wekelijks en maandelijks worden ondersteund, tot maximaal 104 keer of 1 jaar vooruit. |
+| Organisator niet op de deelnemerslijst | Weigering. |
+
+**Beperking:** als je in Outlook één los exemplaar van een reeks wijzigt, wordt alleen de reeks als geheel verwerkt. Zo'n losse wijziging pas je aan op de site.
+
+## Gratis limieten
+- Supabase Free: ruim voldoende. Een project dat 7 dagen niet wordt gebruikt, wordt gepauzeerd. Het script stuurt daarom elke dag een ping om dat te voorkomen.
+- Gmail SMTP: circa 500 mails per dag.
+- Apps Script: een run elke 5 minuten blijft ruim binnen de gratis quota.

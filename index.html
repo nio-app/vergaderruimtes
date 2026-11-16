@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vergaderruimtes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
+    --accent: #c8102e; --accent-dark: #a00d25; --ok: #059669; --busy: #dc2626;
+    --radius: 10px; --hour: 56px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 12px; color: var(--text); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: var(--accent-dark); }
+  button.danger { color: var(--busy); border-color: #f3c4c4; }
+  button.link { border: none; background: none; padding: 4px 6px; color: var(--muted); }
+  input, select, textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  .hidden { display: none !important; }
+  header { background: #fff; border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 20; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  header h1 span { color: var(--accent); }
+  nav { display: flex; gap: 4px; padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  nav button { border: none; background: none; padding: 8px 12px; border-radius: 8px; white-space: nowrap; }
+  nav button.active { background: #fde8eb; color: var(--accent); font-weight: 600; }
+  main { padding: 16px; max-width: 1200px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; }
+  .msg { padding: 10px 12px; border-radius: 8px; margin-top: 10px; font-size: 14px; }
+  .msg.err { background: #fdecec; color: #991b1b; }
+  .msg.ok { background: #e7f7ef; color: #065f46; }
+
+  /* login */
+  #login { max-width: 400px; margin: 60px auto; }
+  #login h2 { margin-top: 0; }
+
+  /* day planner */
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .toolbar .date-title { font-weight: 600; font-size: 16px; flex: 1; min-width: 180px; }
+  .toolbar .date-title::first-letter { text-transform: uppercase; }
+  .toolbar input[type=date] { width: auto; }
+  .planner { display: flex; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
+  .timecol { flex: 0 0 52px; border-right: 1px solid var(--line); }
+  .colhead { height: 52px; border-bottom: 1px solid var(--line); padding: 6px 8px; font-weight: 600; font-size: 14px; position: sticky; top: 0; background: #fff; }
+  .colhead small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .timecol .tick { height: var(--hour); font-size: 11px; color: var(--muted); text-align: right; padding-right: 6px; transform: translateY(-7px); }
+  .roomcol { flex: 1 0 170px; border-right: 1px solid var(--line); }
+  .roomcol:last-child { border-right: none; }
+  .slots { position: relative; cursor: copy; background-image: linear-gradient(var(--line) 1px, transparent 1px); background-size: 100% var(--hour); }
+  .slots .half { position: absolute; left: 0; right: 0; border-top: 1px dashed #eef0f3; pointer-events: none; }
+  .booking { position: absolute; left: 4px; right: 4px; border-radius: 6px; padding: 4px 6px; color: #fff; font-size: 12px; overflow: hidden; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .booking b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .booking.mine { outline: 2px solid #111; outline-offset: -2px; }
+  .nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--accent); z-index: 5; pointer-events: none; }
+
+  /* lists */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: #eef0f3; color: var(--muted); }
+  .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .room-card h3 { margin: 0 0 4px; font-size: 16px; }
+  .copy { display: flex; gap: 6px; margin-top: 8px; }
+  .copy input { font-size: 13px; background: #f9fafb; }
+
+  /* modal */
+  .overlay { position: fixed; inset: 0; background: rgba(15,20,30,.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal { background: #fff; border-radius: 12px; width: 100%; max-width: 440px; padding: 18px; max-height: 92vh; overflow: auto; }
+  .modal h3 { margin: 0 0 6px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* screen mode */
+  body.screen { background: #0f172a; color: #fff; }
+  body.screen header, body.screen nav { display: none; }
+  .screen-wrap { padding: 24px; }
+  .screen-wrap h1 { font-size: 34px; margin: 0 0 4px; }
+  .screen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 20px; }
+  .screen-room { border-radius: 14px; padding: 20px; background: #1e293b; border-left: 10px solid var(--ok); }
+  .screen-room.busy { border-left-color: var(--busy); }
+  .screen-room h2 { margin: 0; font-size: 26px; }
+  .screen-room .state { font-size: 22px; font-weight: 700; margin: 8px 0; }
+  .screen-room.busy .state { color: #fca5a5; } .screen-room .state { color: #6ee7b7; }
+  .screen-room ul { list-style: none; padding: 0; margin: 10px 0 0; font-size: 17px; color: #cbd5e1; }
+  .screen-room li { padding: 4px 0; }
+
+  @media (max-width: 600px) {
+    main { padding: 10px; }
+    .roomcol { flex-basis: 140px; }
+    header h1 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header id="topbar" class="hidden">
+  <h1><span>■</span> <span id="siteTitle" style="color:inherit">Vergaderruimtes</span></h1>
+  <span class="muted" id="whoami"></span>
+  <button class="link" id="logoutBtn">Uitloggen</button>
+</header>
+<nav id="tabs" class="hidden">
+  <button data-tab="planning" class="active">Planning</button>
+  <button data-tab="mine">Mijn reserveringen</button>
+  <button data-tab="rooms">Ruimtes</button>
+  <button data-tab="admin" id="adminTabBtn" class="hidden">Beheer</button>
+  <button data-tab="screen-link">Scherm-modus</button>
+</nav>
+
+<main>
+  <!-- LOGIN -->
+  <section id="login" class="card hidden">
+    <h2>Inloggen</h2>
+    <p class="muted">Vul het e-mailadres in waarmee je bent uitgenodigd. Je krijgt een mail met een inloglink.</p>
+    <form id="loginForm">
+      <label for="loginEmail">E-mailadres</label>
+      <input id="loginEmail" type="email" required autocomplete="email" placeholder="naam@bedrijf.nl">
+      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Stuur inloglink</button></div>
+    </form>
+    <form id="codeForm" class="hidden" style="margin-top:14px">
+      <label for="loginCode">Of vul de code uit de mail in</label>
+      <div class="row"><input id="loginCode" inputmode="numeric" class="grow" placeholder="123456"><button type="submit">Inloggen</button></div>
+    </form>
+    <div id="loginMsg"></div>
+  </section>
+
+  <section id="noaccess" class="card hidden">
+    <h2>Geen toegang</h2>
+    <p>Je bent ingelogd, maar dit e-mailadres staat (nog) niet op de lijst van projectdeelnemers. Vraag de beheerder om je toe te voegen.</p>
+  </section>
+
+  <!-- PLANNING -->
+  <section id="tab-planning" class="tab hidden">
+    <div class="toolbar">
+      <button id="prevDay" aria-label="Vorige dag">‹</button>
+      <button id="todayBtn">Vandaag</button>
+      <button id="nextDay" aria-label="Volgende dag">›</button>
+      <div class="date-title" id="dateTitle"></div>
+      <input type="date" id="datePick">
+      <button class="primary" id="newBookingBtn">+ Reserveren</button>
+    </div>
+    <div class="planner" id="planner"></div>
+    <p class="muted">Klik op een vrij tijdslot om te reserveren. Je kunt een ruimte ook uitnodigen vanuit Outlook via het e-mailadres van de ruimte (zie tabblad Ruimtes).</p>
+  </section>
+
+  <!-- MINE -->
+  <section id="tab-mine" class="tab hidden">
+    <div class="card">
+      <h3 style="margin-top:0">Mijn komende reserveringen</h3>
+      <div id="mineList"></div>
+    </div>
+  </section>
+
+  <!-- ROOMS -->
+  <section id="tab-rooms" class="tab hidden">
+    <div class="rooms-grid" id="roomsGrid"></div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin-top:0">Ruimte uitnodigen vanuit Outlook</h3>
+      <ol class="muted" style="line-height:1.7">
+        <li>Maak in Outlook een vergadering zoals je gewend bent.</li>
+        <li>Voeg het e-mailadres van de ruimte toe als <b>genodigde</b>.</li>
+        <li>Binnen ongeveer 5 minuten krijg je een acceptatie of een weigering terug (bij een weigering staat erin waarom).</li>
+        <li>Verplaats of annuleer je de vergadering in Outlook, dan wordt de reservering automatisch aangepast.</li>
+      </ol>
+      <p class="muted">Let op: dit werkt alleen als de organisator van de vergadering op de deelnemerslijst staat.</p>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="tab-admin" class="tab hidden">
+    <div class="card">
+      <h3 style="margin-top:0">Projectdeelnemers</h3>
+      <p class="muted">Alleen deze e-mailadressen kunnen inloggen en de ruimtes uitnodigen. Na toevoegen kan iemand direct inloggen op deze site.</p>
+      <form id="memberForm" class="row">
+        <input id="mEmail" type="email" placeholder="e-mailadres" required style="flex:2 1 200px">
+        <input id="mName" placeholder="naam" style="flex:1 1 120px">
+        <input id="mCompany" placeholder="bedrijf" style="flex:1 1 120px">
+        <button class="primary" type="submit">Toevoegen</button>
+      </form>
+      <div id="memberMsg"></div>
+      <div style="overflow-x:auto;margin-top:10px"><table id="memberTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Ruimtes</h3>
+      <div style="overflow-x:auto"><table id="roomTable"></table></div>
+      <button style="margin-top:10px" id="addRoomBtn">+ Ruimte toevoegen</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Instellingen</h3>
+      <label for="setTitle">Titel van de site</label>
+      <input id="setTitle">
+      <label for="setMail">Gmail-adres van de ruimtes (basisadres)</label>
+      <input id="setMail" type="email" placeholder="vergaderruimtes.smh@gmail.com">
+      <p class="muted">Elke ruimte krijgt automatisch een eigen adres: basisnaam<b>+alias</b>@gmail.com</p>
+      <button class="primary" id="saveSettings">Opslaan</button>
+      <div id="settingsMsg"></div>
+    </div>
+  </section>
+</main>
+
+<!-- SCREEN MODE -->
+<div id="screen" class="screen-wrap hidden">
+  <h1 id="screenTitle">Vergaderruimtes</h1>
+  <div id="screenClock" style="font-size:20px;color:#94a3b8"></div>
+  <div class="screen-grid" id="screenGrid"></div>
+</div>
+
+<!-- BOOKING MODAL -->
+<div class="overlay hidden" id="bookingModal">
+  <div class="modal">
+    <h3 id="bmTitle">Reserveren</h3>
+    <div id="bmInfo" class="muted"></div>
+    <form id="bookingForm">
+      <label for="bRoom">Ruimte</label>
+      <select id="bRoom" required></select>
+      <label for="bTitle">Onderwerp</label>
+      <input id="bTitle" required placeholder="bijv. Bouwvergadering">
+      <label for="bDate">Datum</label>
+      <input id="bDate" type="date" required>
+      <div class="two">
+        <div><label for="bStart">Van</label><input id="bStart" type="time" step="900" required></div>
+        <div><label for="bEnd">Tot</label><input id="bEnd" type="time" step="900" required></div>
+      </div>
+      <label for="bNotes">Opmerking (optioneel)</label>
+      <textarea id="bNotes" rows="2"></textarea>
+      <div id="bookingMsg"></div>
+      <div class="row" style="margin-top:14px">
+        <button type="button" class="danger hidden" id="bDelete">Verwijderen</button>
+        <div class="grow"></div>
+        <button type="button" id="bCancel">Sluiten</button>
+        <button type="submit" class="primary" id="bSave">Opslaan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ROOM MODAL -->
+<div class="overlay hidden" id="roomModal">
+  <div class="modal">
+    <h3 id="rmTitle">Ruimte</h3>
+    <form id="roomForm">
+      <label for="rName">Naam</label><input id="rName" required>
+      <label for="rAlias">Alias voor e-mailadres (kleine letters, cijfers, -)</label><input id="rAlias" required pattern="[a-z0-9-]+">
+      <div class="two">
+        <div><label for="rCap">Aantal personen</label><input id="rCap" type="number" min="1"></div>
+        <div><label for="rColor">Kleur</label><input id="rColor" type="color" value="#2563eb" style="height:40px;padding:2px"></div>
+      </div>
+      <label for="rLoc">Locatie</label><input id="rLoc">
+      <label for="rDesc">Omschrijving / voorzieningen</label><input id="rDesc" placeholder="bijv. scherm, whiteboard">
+      <label><input type="checkbox" id="rActive" style="width:auto"> Actief (zichtbaar en te reserveren)</label>
+      <div id="roomMsg"></div>
+      <div class="row" style="margin-top:14px">
+        <div class="grow"></div>
+        <button type="button" id="rCancel">Sluiten</button>
+        <button type="submit" class="primary">Opslaan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// ===== Configuratie =====
+const SUPABASE_URL = 'https://usvpblwyejmewgnfhulb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_oXM5qHIc0RGQw1lV3F7Frw_ZyTM_ySo';
+const DAY_START = 7;   // eerste uur in de planning
+const DAY_END = 20;    // laatste uur in de planning
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtDate = (d) => d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const fmtShort = (d) => d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+const isScreen = new URLSearchParams(location.search).has('scherm');
+
+const state = { user: null, email: '', isAdmin: false, rooms: [], members: [], settings: {}, day: startOfDay(new Date()), bookings: [], editing: null };
+
+function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function show(el, on = true) { (typeof el === 'string' ? $(el) : el).classList.toggle('hidden', !on); }
+function msg(id, text, ok = false) { $(id).innerHTML = text ? `<div class="msg ${ok ? 'ok' : 'err'}">${esc(text)}</div>` : ''; }
+function roomEmail(room) {
+  const base = state.settings.mail_base || '';
+  const [local, domain] = base.split('@');
+  return local && domain ? `${local}+${room.alias}@${domain}` : '(stel eerst het Gmail-adres in)';
+}
+function memberName(email) { const m = state.members.find(m => m.email === email); return m?.name || email; }
+function friendlyError(e) {
+  const t = (e?.message || String(e));
+  if (e?.code === '23P01' || /bookings_no_overlap/.test(t)) return 'Deze ruimte is op dat moment al bezet.';
+  if (/bookings_time_check/.test(t)) return 'De eindtijd moet na de begintijd liggen.';
+  if (/row-level security/i.test(t)) return 'Je hebt geen rechten voor deze actie.';
+  if (/duplicate key/.test(t)) return 'Dit bestaat al.';
+  return t;
+}
+
+// ===== Auth =====
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  sb.auth.onAuthStateChange((evt, s) => {
+    if (evt === 'SIGNED_IN' && !state.user) start(s);
+    if (evt === 'SIGNED_OUT') location.reload();
+  });
+  if (session) start(session); else showLogin();
+}
+
+function showLogin() {
+  show('login'); show('topbar', false); show('tabs', false);
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.get('error_description')) msg('loginMsg', 'Inloglink ongeldig of verlopen. Vraag een nieuwe aan.');
+}
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('loginEmail').value.trim().toLowerCase();
+  msg('loginMsg', '');
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname }
+  });
+  if (error) {
+    if (/database error|niet uitgenodigd/i.test(error.message)) msg('loginMsg', 'Dit e-mailadres is niet uitgenodigd. Vraag de beheerder om je toe te voegen.');
+    else if (/rate limit|security purposes/i.test(error.message)) msg('loginMsg', 'Even wachten: je hebt net al een link aangevraagd. Probeer het over een minuut opnieuw.');
+    else msg('loginMsg', error.message);
+    return;
+  }
+  msg('loginMsg', 'Check je mail en klik op de inloglink.', true);
+  show('codeForm');
+});
+
+$('codeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { error } = await sb.auth.verifyOtp({ email: $('loginEmail').value.trim().toLowerCase(), token: $('loginCode').value.trim(), type: 'email' });
+  if (error) msg('loginMsg', 'Code klopt niet of is verlopen.');
+});
+
+$('logoutBtn').addEventListener('click', () => sb.auth.signOut());
+
+async function start(session) {
+  state.user = session.user;
+  state.email = (session.user.email || '').toLowerCase();
+  if (location.hash.includes('access_token')) history.replaceState(null, '', location.pathname + location.search);
+  show('login', false);
+  const { data: member } = await sb.rpc('is_member');
+  if (!member) { show('noaccess'); show('topbar'); $('whoami').textContent = state.email; return; }
+  const { data: admin } = await sb.rpc('is_admin');
+  state.isAdmin = !!admin;
+  await loadBase();
+  if (isScreen) return startScreen();
+  show('topbar'); show('tabs');
+  $('whoami').textContent = memberName(state.email);
+  show('adminTabBtn', state.isAdmin);
+  switchTab('planning');
+  setInterval(() => { if (!document.hidden && currentTab === 'planning') loadDay(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadDay(); });
+}
+
+async function loadBase() {
+  const [rooms, members, settings] = await Promise.all([
+    sb.from('rooms').select('*').order('name'),
+    sb.from('members').select('*').order('name'),
+    sb.from('app_settings').select('*'),
+  ]);
+  state.rooms = rooms.data || [];
+  state.members = members.data || [];
+  state.settings = Object.fromEntries((settings.data || []).map(r => [r.key, r.value]));
+  const title = state.settings.site_title || 'Vergaderruimtes';
+  $('siteTitle').textContent = title; $('screenTitle').textContent = title; document.title = title;
+}
+
+// ===== Tabs =====
+let currentTab = 'planning';
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.tab === 'screen-link') { window.open(location.pathname + '?scherm=1', '_blank'); return; }
+  switchTab(b.dataset.tab);
+}));
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(s => show(s, s.id === 'tab-' + tab));
+  if (tab === 'planning') loadDay();
+  if (tab === 'mine') loadMine();
+  if (tab === 'rooms') renderRooms();
+  if (tab === 'admin') renderAdmin();
+}
+
+// ===== Planning =====
+$('prevDay').onclick = () => { state.day = addDays(state.day, -1); loadDay(); };
+$('nextDay').onclick = () => { state.day = addDays(state.day, 1); loadDay(); };
+$('todayBtn').onclick = () => { state.day = startOfDay(new Date()); loadDay(); };
+$('datePick').onchange = (e) => { if (e.target.value) { state.day = startOfDay(new Date(e.target.value + 'T00:00')); loadDay(); } };
+$('newBookingBtn').onclick = () => {
+  const now = new Date(); let h = Math.max(DAY_START, now.getHours() + 1);
+  if (ymd(state.day) !== ymd(now)) h = 9;
+  openBooking(null, { roomId: activeRooms()[0]?.id, date: state.day, start: `${pad(h)}:00`, end: `${pad(h+1)}:00` });
+};
+
+function activeRooms() { return state.rooms.filter(r => r.active); }
+
+async function loadDay() {
+  const from = state.day, to = addDays(state.day, 1);
+  $('dateTitle').textContent = fmtDate(from);
+  $('datePick').value = ymd(from);
+  const { data, error } = await sb.from('bookings').select('*')
+    .lt('start_at', to.toISOString()).gt('end_at', from.toISOString()).order('start_at');
+  if (error) { console.error(error); return; }
+  state.bookings = data || [];
+  renderPlanner();
+}
+
+function renderPlanner() {
+  const rooms = activeRooms();
+  const hours = DAY_END - DAY_START;
+  const hourPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hour'));
+  const pxPerMin = hourPx / 60;
+  let html = '<div class="timecol"><div class="colhead"></div>';
+  for (let h = DAY_START; h < DAY_END; h++) html += `<div class="tick">${pad(h)}:00</div>`;
+  html += '</div>';
+  if (!rooms.length) html += '<div style="padding:20px" class="muted">Nog geen ruimtes. Voeg ze toe onder Beheer.</div>';
+  for (const r of rooms) {
+    html += `<div class="roomcol"><div class="colhead"><span class="dot" style="background:${esc(r.color)}"></span>${esc(r.name)}<small>${r.capacity ? r.capacity + ' pers.' : ''} ${esc(r.location || '')}</small></div>`;
+    html += `<div class="slots" data-room="${r.id}" style="height:${hours * hourPx}px">`;
+    for (let h = 0; h < hours; h++) html += `<div class="half" style="top:${h * hourPx + hourPx / 2}px"></div>`;
+    for (const b of state.bookings.filter(b => b.room_id === r.id)) {
+      const s = new Date(b.start_at), e = new Date(b.end_at);
+      const dayStartMin = DAY_START * 60, dayEndMin = DAY_END * 60;
+      const sMin = Math.max(dayStartMin, (s < state.day ? 0 : s.getHours() * 60 + s.getMinutes()));
+      const eMin = Math.min(dayEndMin, (e >= addDays(state.day, 1) ? 24 * 60 : e.getHours() * 60 + e.getMinutes()));
+      if (eMin <= dayStartMin || sMin >= dayEndMin) continue;
+      const top = (sMin - dayStartMin) * pxPerMin, height = Math.max(18, (eMin - sMin) * pxPerMin - 2);
+      const mine = b.booked_by === state.email;
+      html += `<div class="booking ${mine ? 'mine' : ''}" data-id="${b.id}" style="top:${top}px;height:${height}px;background:${esc(r.color)}">
+        <b>${esc(b.title)}</b>${hm(s)}–${hm(e)} · ${esc(b.organizer_name || memberName(b.booked_by))}${b.source === 'email' ? ' ✉' : ''}</div>`;
+    }
+    if (ymd(state.day) === ymd(new Date())) {
+      const n = new Date(), nm = n.getHours() * 60 + n.getMinutes();
+      if (nm >= DAY_START * 60 && nm <= DAY_END * 60) html += `<div class="nowline" style="top:${(nm - DAY_START * 60) * pxPerMin}px"></div>`;
+    }
+    html += '</div></div>';
+  }
+  $('planner').innerHTML = html;
+  $('planner').querySelectorAll('.slots').forEach(col => col.addEventListener('click', (ev) => {
+    const bEl = ev.target.closest('.booking');
+    if (bEl) { openBooking(state.bookings.find(b => b.id === bEl.dataset.id)); return; }
+    const y = ev.clientY - col.getBoundingClientRect().top;
+    let min = DAY_START * 60 + Math.floor(y / pxPerMin / 30) * 30;
+    const endMin = Math.min(DAY_END * 60, min + 60);
+    openBooking(null, { roomId: col.dataset.room, date: state.day, start: `${pad(Math.floor(min/60))}:${pad(min%60)}`, end: `${pad(Math.floor(endMin/60))}:${pad(endMin%60)}` });
+  }));
+}
+
+// ===== Booking modal =====
+function openBooking(b, defaults = {}) {
+  state.editing = b;
+  const rooms = activeRooms();
+  $('bRoom').innerHTML = rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  msg('bookingMsg', '');
+  const canEdit = !b || b.booked_by === state.email || state.isAdmin;
+  const viaMail = b && b.source === 'email';
+  if (b) {
+    const s = new Date(b.start_at), e = new Date(b.end_at);
+    $('bmTitle').textContent = canEdit ? 'Reservering' : 'Reservering (alleen bekijken)';
+    $('bmInfo').innerHTML = `Geboekt door <b>${esc(b.organizer_name || memberName(b.booked_by))}</b> (${esc(b.booked_by)})${viaMail ? ' via Outlook-uitnodiging. Wijzig of annuleer deze bij voorkeur in Outlook.' : ''}`;
+    $('bRoom').value = b.room_id; $('bTitle').value = b.title; $('bDate').value = ymd(s);
+    $('bStart').value = hm(s); $('bEnd').value = hm(e); $('bNotes').value = b.notes || '';
+  } else {
+    $('bmTitle').textContent = 'Nieuwe reservering'; $('bmInfo').textContent = '';
+    $('bRoom').value = defaults.roomId || rooms[0]?.id || ''; $('bTitle').value = '';
+    $('bDate').value = ymd(defaults.date || state.day); $('bStart').value = defaults.start || '09:00';
+    $('bEnd').value = defaults.end || '10:00'; $('bNotes').value = '';
+  }
+  ['bRoom','bTitle','bDate','bStart','bEnd','bNotes'].forEach(id => $(id).disabled = !canEdit || viaMail);
+  show('bSave', canEdit && !viaMail);
+  show('bDelete', !!b && canEdit);
+  show('bookingModal');
+  if (!b) setTimeout(() => $('bTitle').focus(), 50);
+}
+$('bCancel').onclick = () => show('bookingModal', false);
+$('bookingModal').addEventListener('click', (e) => { if (e.target.id === 'bookingModal') show('bookingModal', false); });
+
+$('bookingForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const start = new Date(`${$('bDate').value}T${$('bStart').value}`);
+  const end = new Date(`${$('bDate').value}T${$('bEnd').value}`);
+  if (end <= start) return msg('bookingMsg', 'De eindtijd moet na de begintijd liggen.');
+  const row = { room_id: $('bRoom').value, title: $('bTitle').value.trim(), start_at: start.toISOString(), end_at: end.toISOString(), notes: $('bNotes').value.trim() || null };
+  const me = state.members.find(m => m.email === state.email);
+  let res;
+  if (state.editing) res = await sb.from('bookings').update(row).eq('id', state.editing.id);
+  else res = await sb.from('bookings').insert({ ...row, booked_by: state.email, organizer_name: me?.name || null, source: 'web' });
+  if (res.error) return msg('bookingMsg', friendlyError(res.error));
+  show('bookingModal', false);
+  state.day = startOfDay(start);
+  if (currentTab === 'mine') loadMine(); else loadDay();
+});
+
+$('bDelete').onclick = async () => {
+  if (!state.editing || !confirm('Deze reservering verwijderen?')) return;
+  const { error } = await sb.from('bookings').delete().eq('id', state.editing.id);
+  if (error) return msg('bookingMsg', friendlyError(error));
+  show('bookingModal', false);
+  if (currentTab === 'mine') loadMine(); else loadDay();
+};
+
+// ===== Mijn reserveringen =====
+async function loadMine() {
+  const { data } = await sb.from('bookings').select('*').eq('booked_by', state.email).gte('end_at', new Date().toISOString()).order('start_at').limit(100);
+  const list = data || [];
+  if (!list.length) { $('mineList').innerHTML = '<p class="muted">Je hebt geen komende reserveringen.</p>'; return; }
+  $('mineList').innerHTML = '<div style="overflow-x:auto"><table><tr><th>Datum</th><th>Tijd</th><th>Ruimte</th><th>Onderwerp</th><th></th></tr>' +
+    list.map(b => {
+      const s = new Date(b.start_at), e = new Date(b.end_at), r = state.rooms.find(r => r.id === b.room_id);
+      return `<tr><td>${fmtShort(s)}</td><td>${hm(s)}–${hm(e)}</td><td><span class="dot" style="background:${esc(r?.color)}"></span>${esc(r?.name)}</td>
+        <td>${esc(b.title)} ${b.source === 'email' ? '<span class="tag">Outlook</span>' : ''}</td><td><button class="link" data-id="${b.id}">Openen</button></td></tr>`;
+    }).join('') + '</table></div>';
+  $('mineList').querySelectorAll('button[data-id]').forEach(btn => btn.onclick = () => openBooking(list.find(b => b.id === btn.dataset.id)));
+}
+
+// ===== Ruimtes =====
+function renderRooms() {
+  $('roomsGrid').innerHTML = activeRooms().map(r => `
+    <div class="card room-card" style="margin:0;border-top:4px solid ${esc(r.color)}">
+      <h3>${esc(r.name)}</h3>
+      <div class="muted">${r.capacity ? r.capacity + ' personen · ' : ''}${esc(r.location || '')}</div>
+      ${r.description ? `<div style="margin-top:6px">${esc(r.description)}</div>` : ''}
+      <label>E-mailadres voor Outlook</label>
+      <div class="copy" style="align-items:center"><code style="flex:1;word-break:break-all;font-size:13px">${esc(roomEmail(r))}</code><button data-copy="${esc(roomEmail(r))}">Kopieer</button></div>
+    </div>`).join('') || '<p class="muted">Nog geen ruimtes.</p>';
+  $('roomsGrid').querySelectorAll('button[data-copy]').forEach(b => b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Gekopieerd'; } catch { prompt('Kopieer het adres:', b.dataset.copy); }
+    setTimeout(() => b.textContent = 'Kopieer', 1500);
+  });
+}
+
+// ===== Beheer =====
+async function renderAdmin() {
+  await loadBase();
+  $('memberTable').innerHTML = '<tr><th>E-mail</th><th>Naam</th><th>Bedrijf</th><th>Beheerder</th><th></th></tr>' +
+    state.members.map(m => `<tr><td>${esc(m.email)}</td><td>${esc(m.name)}</td><td>${esc(m.company)}</td>
+      <td><input type="checkbox" style="width:auto" data-admin="${esc(m.email)}" ${m.is_admin ? 'checked' : ''} ${m.email === state.email ? 'disabled' : ''}></td>
+      <td>${m.email === state.email ? '<span class="muted">jij</span>' : `<button class="link" data-del="${esc(m.email)}">Verwijderen</button>`}</td></tr>`).join('');
+  $('memberTable').querySelectorAll('[data-admin]').forEach(cb => cb.onchange = async () => {
+    const { error } = await sb.from('members').update({ is_admin: cb.checked }).eq('email', cb.dataset.admin);
+    if (error) { msg('memberMsg', friendlyError(error)); cb.checked = !cb.checked; }
+  });
+  $('memberTable').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm(`${b.dataset.del} verwijderen? Deze persoon kan dan niet meer inloggen of reserveren.`)) return;
+    const { error } = await sb.from('members').delete().eq('email', b.dataset.del);
+    if (error) return msg('memberMsg', friendlyError(error));
+    renderAdmin();
+  });
+
+  $('roomTable').innerHTML = '<tr><th>Ruimte</th><th>E-mailadres</th><th>Pers.</th><th>Status</th><th></th></tr>' +
+    state.rooms.map(r => `<tr><td><span class="dot" style="background:${esc(r.color)}"></span>${esc(r.name)}</td><td class="muted">${esc(roomEmail(r))}</td>
+      <td>${r.capacity ?? ''}</td><td>${r.active ? 'Actief' : '<span class="tag">Inactief</span>'}</td>
+      <td><button class="link" data-room="${r.id}">Bewerken</button></td></tr>`).join('');
+  $('roomTable').querySelectorAll('[data-room]').forEach(b => b.onclick = () => openRoom(state.rooms.find(r => r.id === b.dataset.room)));
+
+  $('setTitle').value = state.settings.site_title || '';
+  $('setMail').value = state.settings.mail_base || '';
+}
+
+$('memberForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const row = { email: $('mEmail').value.trim().toLowerCase(), name: $('mName').value.trim() || null, company: $('mCompany').value.trim() || null };
+  const { error } = await sb.from('members').insert(row);
+  if (error) return msg('memberMsg', friendlyError(error));
+  msg('memberMsg', `${row.email} toegevoegd. Stuur deze persoon de link naar deze site.`, true);
+  e.target.reset(); renderAdmin();
+});
+
+let editingRoom = null;
+$('addRoomBtn').onclick = () => openRoom(null);
+function openRoom(r) {
+  editingRoom = r; msg('roomMsg', '');
+  $('rmTitle').textContent = r ? 'Ruimte bewerken' : 'Nieuwe ruimte';
+  $('rName').value = r?.name || ''; $('rAlias').value = r?.alias || ''; $('rCap').value = r?.capacity ?? '';
+  $('rColor').value = r?.color || '#2563eb'; $('rLoc').value = r?.location || ''; $('rDesc').value = r?.description || '';
+  $('rActive').checked = r ? r.active : true;
+  show('roomModal');
+}
+$('rCancel').onclick = () => show('roomModal', false);
+$('roomForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const row = { name: $('rName').value.trim(), alias: $('rAlias').value.trim().toLowerCase(), capacity: $('rCap').value ? +$('rCap').value : null,
+    color: $('rColor').value, location: $('rLoc').value.trim() || null, description: $('rDesc').value.trim() || null, active: $('rActive').checked };
+  const res = editingRoom ? await sb.from('rooms').update(row).eq('id', editingRoom.id) : await sb.from('rooms').insert(row);
+  if (res.error) return msg('roomMsg', friendlyError(res.error));
+  show('roomModal', false); renderAdmin();
+});
+
+$('saveSettings').onclick = async () => {
+  const rows = [{ key: 'site_title', value: $('setTitle').value.trim() || 'Vergaderruimtes' }, { key: 'mail_base', value: $('setMail').value.trim().toLowerCase() }];
+  const { error } = await sb.from('app_settings').upsert(rows);
+  if (error) return msg('settingsMsg', friendlyError(error));
+  msg('settingsMsg', 'Opgeslagen.', true); renderAdmin();
+};
+
+// ===== Scherm-modus (voor een scherm in de keet) =====
+async function startScreen() {
+  document.body.classList.add('screen');
+  document.querySelector('main').classList.add('hidden');
+  show('screen');
+  const tick = async () => {
+    const now = new Date(), dayEnd = addDays(startOfDay(now), 1);
+    $('screenClock').textContent = now.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + hm(now);
+    const { data } = await sb.from('bookings').select('*').lt('start_at', dayEnd.toISOString()).gt('end_at', now.toISOString()).order('start_at');
+    const list = data || [];
+    $('screenGrid').innerHTML = activeRooms().map(r => {
+      const items = list.filter(b => b.room_id === r.id);
+      const cur = items.find(b => new Date(b.start_at) <= now);
+      const next = items.filter(b => b !== cur);
+      const status = cur ? `Bezet tot ${hm(new Date(cur.end_at))}` : (next[0] ? `Vrij tot ${hm(new Date(next[0].start_at))}` : 'Vrij voor de rest van de dag');
+      return `<div class="screen-room ${cur ? 'busy' : ''}"><h2>${esc(r.name)}</h2><div class="state">${status}</div>
+        ${cur ? `<div style="font-size:18px">${esc(cur.title)} · ${esc(cur.organizer_name || memberName(cur.booked_by))}</div>` : ''}
+        <ul>${next.slice(0, 4).map(b => `<li>${hm(new Date(b.start_at))}–${hm(new Date(b.end_at))} · ${esc(b.title)}</li>`).join('')}</ul></div>`;
+    }).join('');
+  };
+  tick(); setInterval(tick, 60000);
+}
+
+init();
+</script>
+</body>
+</html>
