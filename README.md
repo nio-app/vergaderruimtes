@@ -17,6 +17,13 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 - *Agenda-abonnement*: elke deelnemer krijgt onder *Ruimtes* een persoonlijke iCal-link voor alle ruimtes of één ruimte. Die voeg je toe in Outlook, Google Agenda of op je iPhone. De link wordt geserveerd door de Edge Function `agenda`.
 - *Scherm-modus* (`?scherm=1`): laat op een scherm in de keet per ruimte zien of die vrij of bezet is.
 
+## Privacy (AVG)
+
+- **Inloggen alleen met een link per mail.** Wachtwoorden zijn uitgeschakeld en worden ook aan de serverkant geblokkeerd.
+- **Deelnemers zien elkaars gegevens niet.** Bij een reservering staat alleen de naam van de organisator. E-mailadressen, bedrijven en de deelnemerslijst ziet alleen een beheerder.
+- **Andere genodigden worden nergens opgeslagen.** Van een Outlook-uitnodiging bewaart het systeem alleen onderwerp, tijd, ruimte en organisator. Na verwerking gaat de mail direct naar de prullenbak van het ruimte-Gmailaccount en verdwijnt daar na 30 dagen.
+- **Mails uit het systeem** (weigeringen, agenda-feed) noemen bij een botsing alleen de naam van de organisator.
+
 ## Eenmalige installatie
 
 ### 1. Gmail-account voor de ruimtes

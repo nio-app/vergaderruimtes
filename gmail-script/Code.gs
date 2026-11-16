@@ -52,8 +52,10 @@ function verwerkUitnodigingen() {
           console.error('Fout bij bericht ' + id + ': ' + err);
         }
       }
+      // dataminimalisatie: verwerkte uitnodigingen (met deelnemerslijsten) direct naar de prullenbak;
+      // Gmail verwijdert ze daar na 30 dagen definitief
       thread.addLabel(label);
-      thread.moveToArchive();
+      thread.moveToTrash();
     }
     props.setProperty('verwerkt', JSON.stringify(done.slice(-400)));
   } finally {

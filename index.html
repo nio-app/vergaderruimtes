@@ -105,7 +105,6 @@
 <header id="topbar" class="hidden">
   <h1><span>■</span> <span id="siteTitle" style="color:inherit">Vergaderruimtes</span></h1>
   <span class="muted" id="whoami"></span>
-  <button class="link" id="pwBtn">Wachtwoord</button>
   <button class="link" id="logoutBtn">Uitloggen</button>
 </header>
 <nav id="tabs" class="hidden">
@@ -120,18 +119,11 @@
   <!-- LOGIN -->
   <section id="login" class="card hidden">
     <h2>Inloggen</h2>
-    <form id="pwForm">
-      <label for="pwEmail">E-mailadres</label>
-      <input id="pwEmail" type="email" required autocomplete="username" placeholder="naam@bedrijf.nl">
-      <label for="pwPass">Wachtwoord</label>
-      <input id="pwPass" type="password" required autocomplete="current-password">
-      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Inloggen</button></div>
-    </form>
-    <p class="muted" style="margin-top:18px">Eerste keer, of wachtwoord vergeten? Log in met een link per mail en stel daarna (opnieuw) een wachtwoord in.</p>
+    <p class="muted">Vul het e-mailadres in waarmee je bent uitgenodigd. Je krijgt een mail met een inloglink.</p>
     <form id="loginForm">
       <label for="loginEmail">E-mailadres</label>
       <input id="loginEmail" type="email" required autocomplete="email" placeholder="naam@bedrijf.nl">
-      <div style="margin-top:12px"><button type="submit" style="width:100%">Stuur inloglink</button></div>
+      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Stuur inloglink</button></div>
     </form>
     <form id="codeForm" class="hidden" style="margin-top:14px">
       <label for="loginCode">Of vul de code uit de mail in</label>
@@ -144,11 +136,6 @@
     <h2>Geen toegang</h2>
     <p>Je bent ingelogd, maar dit e-mailadres staat (nog) niet op de lijst van projectdeelnemers. Vraag de beheerder om je toe te voegen.</p>
   </section>
-
-  <div id="pwBanner" class="card hidden" style="border-color:#f5c2c9;background:#fff5f6">
-    <b>Stel een wachtwoord in</b> — dan kun je de volgende keer inloggen zonder op een mail te wachten.
-    <div class="row" style="margin-top:8px"><button class="primary" id="pwBannerBtn">Wachtwoord instellen</button><button class="link" id="pwBannerLater">Later</button></div>
-  </div>
 
   <!-- PLANNING -->
   <section id="tab-planning" class="tab hidden">
@@ -278,26 +265,6 @@
   </div>
 </div>
 
-<!-- PASSWORD MODAL -->
-<div class="overlay hidden" id="pwModal">
-  <div class="modal">
-    <h3>Wachtwoord instellen</h3>
-    <p class="muted">Minimaal 8 tekens. Hiermee log je voortaan in met je e-mailadres en wachtwoord.</p>
-    <form id="pwSetForm">
-      <input type="email" id="pwSetUser" autocomplete="username" class="hidden">
-      <label for="pwNew">Nieuw wachtwoord</label>
-      <input id="pwNew" type="password" minlength="8" required autocomplete="new-password">
-      <label for="pwNew2">Herhaal wachtwoord</label>
-      <input id="pwNew2" type="password" minlength="8" required autocomplete="new-password">
-      <div id="pwSetMsg"></div>
-      <div class="row" style="margin-top:14px"><div class="grow"></div>
-        <button type="button" id="pwCancel">Sluiten</button>
-        <button type="submit" class="primary">Opslaan</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <!-- ROOM MODAL -->
 <div class="overlay hidden" id="roomModal">
   <div class="modal">
@@ -403,44 +370,6 @@ $('codeForm').addEventListener('submit', async (e) => {
 
 $('logoutBtn').addEventListener('click', () => sb.auth.signOut());
 
-$('pwForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  msg('loginMsg', '');
-  const email = $('pwEmail').value.trim().toLowerCase();
-  const { error } = await sb.auth.signInWithPassword({ email, password: $('pwPass').value });
-  if (error) {
-    if (/invalid login credentials/i.test(error.message))
-      msg('loginMsg', 'E-mailadres of wachtwoord klopt niet. Nog geen wachtwoord ingesteld? Gebruik dan eerst de inloglink per mail.');
-    else msg('loginMsg', error.message);
-    $('loginEmail').value = email;
-  }
-});
-
-function openPwModal() {
-  msg('pwSetMsg', ''); $('pwNew').value = ''; $('pwNew2').value = ''; $('pwSetUser').value = state.email;
-  show('pwModal'); setTimeout(() => $('pwNew').focus(), 50);
-}
-$('pwBtn').onclick = openPwModal;
-$('pwBannerBtn').onclick = openPwModal;
-$('pwBannerLater').onclick = () => { show('pwBanner', false); try { localStorage.setItem('pwLater', '1'); } catch {} };
-$('pwCancel').onclick = () => show('pwModal', false);
-$('pwSetForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const pw = $('pwNew').value;
-  if (pw.length < 8) return msg('pwSetMsg', 'Gebruik minimaal 8 tekens.');
-  if (pw !== $('pwNew2').value) return msg('pwSetMsg', 'De wachtwoorden zijn niet gelijk.');
-  const { error } = await sb.auth.updateUser({ password: pw, data: { has_password: true } });
-  if (error) {
-    if (/reauthenticat|nonce/i.test(error.message)) return msg('pwSetMsg', 'Log opnieuw in via de link per mail en probeer het direct daarna nog eens.');
-    if (/same|different from the old/i.test(error.message)) return msg('pwSetMsg', 'Dit is al je huidige wachtwoord.');
-    if (/weak|short|characters/i.test(error.message)) return msg('pwSetMsg', 'Dit wachtwoord is te zwak. Kies een langer of minder voor de hand liggend wachtwoord.');
-    return msg('pwSetMsg', error.message);
-  }
-  msg('pwSetMsg', 'Wachtwoord opgeslagen. Voortaan kun je inloggen met je e-mailadres en wachtwoord.', true);
-  show('pwBanner', false);
-  setTimeout(() => show('pwModal', false), 1500);
-});
-
 async function start(session) {
   state.user = session.user;
   state.email = (session.user.email || '').toLowerCase();
@@ -455,8 +384,6 @@ async function start(session) {
   show('topbar'); show('tabs');
   $('whoami').textContent = memberName(state.email);
   show('adminTabBtn', state.isAdmin);
-  let later = false; try { later = localStorage.getItem('pwLater') === '1'; } catch {}
-  show('pwBanner', !session.user.user_metadata?.has_password && !later);
   switchTab('planning');
   setInterval(() => { if (!document.hidden && currentTab === 'planning') loadDay(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadDay(); });
@@ -508,8 +435,7 @@ async function loadDay() {
   const from = state.day, to = addDays(state.day, 1);
   $('dateTitle').textContent = fmtDate(from);
   $('datePick').value = ymd(from);
-  const { data, error } = await sb.from('bookings').select('*')
-    .lt('start_at', to.toISOString()).gt('end_at', from.toISOString()).order('start_at');
+  const { data, error } = await sb.rpc('list_bookings', { p_from: from.toISOString(), p_to: to.toISOString() });
   if (error) { console.error(error); return; }
   state.bookings = data || [];
   renderPlanner();
@@ -535,9 +461,9 @@ function renderPlanner() {
       const eMin = Math.min(dayEndMin, (e >= addDays(state.day, 1) ? 24 * 60 : e.getHours() * 60 + e.getMinutes()));
       if (eMin <= dayStartMin || sMin >= dayEndMin) continue;
       const top = (sMin - dayStartMin) * pxPerMin, height = Math.max(18, (eMin - sMin) * pxPerMin - 2);
-      const mine = b.booked_by === state.email;
+      const mine = b.mine;
       html += `<div class="booking ${mine ? 'mine' : ''}" data-id="${b.id}" style="top:${top}px;height:${height}px;background:${esc(r.color)}">
-        <b>${esc(b.title)}</b>${hm(s)}–${hm(e)} · ${esc(b.organizer_name || memberName(b.booked_by))}${b.source === 'email' ? ' ✉' : ''}</div>`;
+        <b>${esc(b.title)}</b>${hm(s)}–${hm(e)} · ${esc(b.organizer_name || 'Onbekend')}${b.source === 'email' ? ' ✉' : ''}</div>`;
     }
     if (ymd(state.day) === ymd(new Date())) {
       const n = new Date(), nm = n.getHours() * 60 + n.getMinutes();
@@ -569,12 +495,12 @@ function openBooking(b, defaults = {}) {
   const rooms = activeRooms();
   $('bRoom').innerHTML = rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
   msg('bookingMsg', '');
-  const canEdit = !b || b.booked_by === state.email || state.isAdmin;
+  const canEdit = !b || b.can_edit;
   const viaMail = b && b.source === 'email';
   if (b) {
     const s = new Date(b.start_at), e = new Date(b.end_at);
     $('bmTitle').textContent = canEdit ? 'Reservering' : 'Reservering (alleen bekijken)';
-    $('bmInfo').innerHTML = `Geboekt door <b>${esc(b.organizer_name || memberName(b.booked_by))}</b> (${esc(b.booked_by)})${viaMail ? ' via Outlook-uitnodiging. Wijzig of annuleer deze bij voorkeur in Outlook.' : ''}`;
+    $('bmInfo').innerHTML = `Geboekt door <b>${esc(b.organizer_name || 'Onbekend')}</b>${viaMail ? ' via Outlook-uitnodiging. Wijzig of annuleer deze bij voorkeur in Outlook.' : ''}`;
     $('bRoom').value = b.room_id; $('bTitle').value = b.title; $('bDate').value = ymd(s);
     $('bStart').value = hm(s); $('bEndDate').value = ymd(e); $('bEnd').value = hm(e); $('bNotes').value = b.notes || '';
   } else {
@@ -619,7 +545,7 @@ $('bDelete').onclick = async () => {
 
 // ===== Mijn reserveringen =====
 async function loadMine() {
-  const { data } = await sb.from('bookings').select('*').eq('booked_by', state.email).gte('end_at', new Date().toISOString()).order('start_at').limit(100);
+  const { data } = await sb.rpc('list_bookings', { p_from: new Date().toISOString(), p_to: addDays(new Date(), 3650).toISOString(), p_only_mine: true });
   const list = data || [];
   if (!list.length) { $('mineList').innerHTML = '<p class="muted">Je hebt geen komende reserveringen.</p>'; return; }
   $('mineList').innerHTML = '<div style="overflow-x:auto"><table><tr><th>Datum</th><th>Tijd</th><th>Ruimte</th><th>Onderwerp</th><th></th></tr>' +
@@ -746,7 +672,7 @@ async function startScreen() {
   const tick = async () => {
     const now = new Date(), dayEnd = addDays(startOfDay(now), 1);
     $('screenClock').textContent = now.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + hm(now);
-    const { data } = await sb.from('bookings').select('*').lt('start_at', dayEnd.toISOString()).gt('end_at', now.toISOString()).order('start_at');
+    const { data } = await sb.rpc('list_bookings', { p_from: now.toISOString(), p_to: dayEnd.toISOString() });
     const list = data || [];
     $('screenGrid').innerHTML = activeRooms().map(r => {
       const items = list.filter(b => b.room_id === r.id);
@@ -754,7 +680,7 @@ async function startScreen() {
       const next = items.filter(b => b !== cur);
       const status = cur ? `Bezet tot ${hm(new Date(cur.end_at))}` : (next[0] ? `Vrij tot ${hm(new Date(next[0].start_at))}` : 'Vrij voor de rest van de dag');
       return `<div class="screen-room ${cur ? 'busy' : ''}"><h2>${esc(r.name)}</h2><div class="state">${status}</div>
-        ${cur ? `<div style="font-size:18px">${esc(cur.title)} · ${esc(cur.organizer_name || memberName(cur.booked_by))}</div>` : ''}
+        ${cur ? `<div style="font-size:18px">${esc(cur.title)} · ${esc(cur.organizer_name || 'Onbekend')}</div>` : ''}
         <ul>${next.slice(0, 4).map(b => `<li>${hm(new Date(b.start_at))}–${hm(new Date(b.end_at))} · ${esc(b.title)}</li>`).join('')}</ul></div>`;
     }).join('');
   };
