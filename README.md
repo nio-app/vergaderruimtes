@@ -22,6 +22,10 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 - **Inloggen alleen met een link per mail.** Wachtwoorden zijn uitgeschakeld en worden ook aan de serverkant geblokkeerd.
 - **Deelnemers zien elkaars gegevens niet.** Bij een reservering staat alleen de naam van de organisator. E-mailadressen, bedrijven en de deelnemerslijst ziet alleen een beheerder.
 - **Andere genodigden worden nergens opgeslagen.** Van een Outlook-uitnodiging bewaart het systeem alleen onderwerp, tijd, ruimte en organisator. Na verwerking gaat de mail direct naar de prullenbak van het ruimte-Gmailaccount en verdwijnt daar na 30 dagen.
+- **Bewaartermijnen:**
+  - reserveringen worden 3 maanden na afloop automatisch verwijderd, elke nacht om 03:15
+  - verwijder je een deelnemer, dan verdwijnen ook direct diens inlogaccount en agenda-link
+  - in Gmail gaan verzonden mails (inloglinks, acceptaties en weigeringen) na 30 dagen naar de prullenbak, en Gmail wist de prullenbak zelf na 30 dagen
 - **Mails uit het systeem** (weigeringen, agenda-feed) noemen bij een botsing alleen de naam van de organisator.
 
 ## Eenmalige installatie

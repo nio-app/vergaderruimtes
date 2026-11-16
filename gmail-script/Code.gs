@@ -347,9 +347,22 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function unescapeText(s) { return (s || '').replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1'); }
 function fmt(d) { return Utilities.formatDate(d, CONFIG.DEFAULT_TZ, "EEE d MMM yyyy HH:mm"); }
 
-/** Dagelijkse ping zodat het gratis Supabase-project niet automatisch pauzeert. */
+/** Dagelijks: ping zodat het gratis Supabase-project niet pauzeert, en mailbox opruimen (AVG). */
 function houdWakker() {
   callSupabase({ method: 'CANCEL', uid: 'keep-alive', room_alias: 'bestaat-niet' });
+  ruimMailboxOp();
+}
+
+/** Verzonden mails (inloglinks, acceptaties/weigeringen) en oude verwerkte mail na 30 dagen naar de prullenbak.
+ *  Gmail verwijdert de prullenbak zelf definitief na 30 dagen. */
+function ruimMailboxOp() {
+  ['in:sent older_than:30d', 'label:' + CONFIG.LABEL.replace(/ /g, '-') + ' older_than:30d -in:trash'].forEach(q => {
+    let threads;
+    do {
+      threads = GmailApp.search(q, 0, 100);
+      if (threads.length) GmailApp.moveThreadsToTrash(threads);
+    } while (threads.length === 100);
+  });
 }
 
 /** Handmatige test zonder mail: voer uit vanuit de editor. */
