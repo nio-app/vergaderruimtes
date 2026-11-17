@@ -119,15 +119,16 @@
   <!-- LOGIN -->
   <section id="login" class="card hidden">
     <h2>Inloggen</h2>
-    <p class="muted">Vul het e-mailadres in waarmee je bent uitgenodigd. Je krijgt een mail met een inloglink.</p>
+    <p class="muted">Vul het e-mailadres in waarmee je bent uitgenodigd. Je krijgt een mail met een inlogcode.</p>
     <form id="loginForm">
       <label for="loginEmail">E-mailadres</label>
       <input id="loginEmail" type="email" required autocomplete="email" placeholder="naam@bedrijf.nl">
-      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Stuur inloglink</button></div>
+      <div style="margin-top:12px"><button class="primary" type="submit" style="width:100%">Stuur inlogcode</button></div>
     </form>
     <form id="codeForm" class="hidden" style="margin-top:14px">
-      <label for="loginCode">Of vul de code uit de mail in</label>
-      <div class="row"><input id="loginCode" inputmode="numeric" class="grow" placeholder="123456"><button type="submit">Inloggen</button></div>
+      <label for="loginCode">Code uit de mail</label>
+      <div class="row"><input id="loginCode" inputmode="numeric" autocomplete="one-time-code" class="grow" placeholder="123456"><button type="submit" class="primary">Inloggen</button></div>
+      <p class="muted">Geen mail? Kijk ook in je spam. Vraag niet meteen een nieuwe code aan: elke nieuwe code maakt de vorige ongeldig.</p>
     </form>
     <div id="loginMsg"></div>
   </section>
@@ -358,14 +359,14 @@ $('loginForm').addEventListener('submit', async (e) => {
     else msg('loginMsg', error.message);
     return;
   }
-  msg('loginMsg', 'Check je mail en klik op de inloglink.', true);
-  show('codeForm');
+  msg('loginMsg', 'Code verstuurd naar ' + email + '. Dit kan een paar minuten duren.', true);
+  show('codeForm'); setTimeout(() => $('loginCode').focus(), 50);
 });
 
 $('codeForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const { error } = await sb.auth.verifyOtp({ email: $('loginEmail').value.trim().toLowerCase(), token: $('loginCode').value.trim(), type: 'email' });
-  if (error) msg('loginMsg', 'Code klopt niet of is verlopen.');
+  const { error } = await sb.auth.verifyOtp({ email: $('loginEmail').value.trim().toLowerCase(), token: $('loginCode').value.replace(/\s/g, ''), type: 'email' });
+  if (error) msg('loginMsg', 'Code klopt niet of is verlopen. Gebruik de code uit de nieuwste mail.');
 });
 
 $('logoutBtn').addEventListener('click', () => sb.auth.signOut());
