@@ -49,7 +49,7 @@
   .planner { display: flex; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; max-height: calc(100vh - 230px); min-height: 420px; align-items: flex-start; }
   .timecol .colhead { z-index: 6; }
   .colhead { z-index: 6; }
-  .timecol { flex: 0 0 52px; border-right: 1px solid var(--line); }
+  .timecol { flex: 0 0 52px; border-right: 1px solid var(--line); position: sticky; left: 0; background: #fff; z-index: 7; }
   .colhead { height: 52px; border-bottom: 1px solid var(--line); padding: 6px 8px; font-weight: 600; font-size: 14px; position: sticky; top: 0; background: #fff; }
   .colhead small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
   .timecol .tick { height: var(--hour); font-size: 11px; color: var(--muted); text-align: right; padding-right: 6px; transform: translateY(-7px); }
@@ -60,6 +60,16 @@
   .booking { position: absolute; left: 4px; right: 4px; border-radius: 6px; padding: 4px 6px; color: #fff; font-size: 12px; overflow: hidden; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
   .booking b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .booking.mine { outline: 2px solid #111; outline-offset: -2px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; padding: 8px 12px; }
+  .seg button.active { background: #fde8eb; color: var(--accent); font-weight: 600; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  .daycol { flex: 1 0 130px; border-right: 1px solid var(--line); }
+  .daycol:last-child { border-right: none; }
+  .daycol .colhead.today { color: var(--accent); }
+  .lanesep { position: absolute; top: 0; bottom: 0; border-left: 1px dashed #eef0f3; pointer-events: none; }
+  .week .booking { left: 2px; right: 2px; padding: 2px 4px; font-size: 11px; }
+  .week .booking b { font-size: 11px; }
   .nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--accent); z-index: 5; pointer-events: none; }
 
   /* lists */
@@ -157,15 +167,17 @@
   <!-- PLANNING -->
   <section id="tab-planning" class="tab hidden">
     <div class="toolbar">
-      <button id="prevDay" aria-label="Vorige dag">‹</button>
+      <div class="seg"><button id="viewDay" type="button">Dag</button><button id="viewWeek" type="button">Week</button></div>
+      <button id="prevDay" aria-label="Vorige">‹</button>
       <button id="todayBtn">Vandaag</button>
-      <button id="nextDay" aria-label="Volgende dag">›</button>
+      <button id="nextDay" aria-label="Volgende">›</button>
       <div class="date-title" id="dateTitle"></div>
       <input type="date" id="datePick">
       <button class="primary" id="newBookingBtn">+ Reserveren</button>
     </div>
+    <div class="legend" id="legend"></div>
     <div class="planner" id="planner"></div>
-    <p class="muted">Klik op een vrij tijdslot om te reserveren. Je kunt een ruimte ook uitnodigen vanuit Outlook via het e-mailadres van de ruimte (zie tabblad Ruimtes).</p>
+    <p class="muted">Klik op een vrij tijdslot om te reserveren (in de weekweergave heeft elke ruimte een eigen strook per dag, zie de kleuren). Je kunt een ruimte ook uitnodigen vanuit Outlook via het e-mailadres van de ruimte (zie tabblad Ruimtes).</p>
   </section>
 
   <!-- MINE -->
@@ -496,8 +508,15 @@ function switchTab(tab) {
 }
 
 // ===== Planning =====
-$('prevDay').onclick = () => { state.day = addDays(state.day, -1); loadDay(); };
-$('nextDay').onclick = () => { state.day = addDays(state.day, 1); loadDay(); };
+function weekStart(d) { const x = startOfDay(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function isoWeek(d) { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 86400000 + 1) / 7); }
+try { state.view = localStorage.getItem('view') || 'week'; } catch { state.view = 'week'; }
+function setView(v) { state.view = v; try { localStorage.setItem('view', v); } catch {} state.scrolledDay = null; loadDay(); }
+$('viewDay').onclick = () => setView('day');
+$('viewWeek').onclick = () => setView('week');
+const step = () => state.view === 'week' ? 7 : 1;
+$('prevDay').onclick = () => { state.day = addDays(state.day, -step()); loadDay(); };
+$('nextDay').onclick = () => { state.day = addDays(state.day, step()); loadDay(); };
 $('todayBtn').onclick = () => { state.day = startOfDay(new Date()); loadDay(); };
 $('datePick').onchange = (e) => { if (e.target.value) { state.day = startOfDay(new Date(e.target.value + 'T00:00')); loadDay(); } };
 $('newBookingBtn').onclick = () => {
@@ -509,59 +528,93 @@ $('newBookingBtn').onclick = () => {
 function activeRooms() { return state.rooms.filter(r => r.active); }
 
 async function loadDay() {
-  const from = state.day, to = addDays(state.day, 1);
-  $('dateTitle').textContent = fmtDate(from);
-  $('datePick').value = ymd(from);
+  const week = state.view === 'week';
+  $('viewDay').classList.toggle('active', !week); $('viewWeek').classList.toggle('active', week);
+  const from = week ? weekStart(state.day) : state.day;
+  const to = addDays(from, week ? 7 : 1);
+  if (week) {
+    const last = addDays(from, 6);
+    const sameMonth = from.getMonth() === last.getMonth();
+    $('dateTitle').textContent = `Week ${isoWeek(from)} · ${from.getDate()}${sameMonth ? '' : ' ' + from.toLocaleDateString('nl-NL', { month: 'short' })} – ${last.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  } else {
+    $('dateTitle').textContent = fmtDate(from);
+  }
+  $('datePick').value = ymd(state.day);
   const { data, error } = await sb.rpc('list_bookings', { p_from: from.toISOString(), p_to: to.toISOString() });
   if (error) { console.error(error); return; }
   state.bookings = data || [];
+  state.rangeFrom = from;
   renderPlanner();
 }
 
 function renderPlanner() {
   const rooms = activeRooms();
+  const week = state.view === 'week';
   const hours = DAY_END - DAY_START;
   const hourPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hour'));
   const pxPerMin = hourPx / 60;
+  const todayStr = ymd(new Date());
+
+  // kolommen: dagweergave = per ruimte; weekweergave = per dag met een strook per ruimte
+  const cols = week
+    ? [...Array(7)].map((_, i) => { const d = addDays(state.rangeFrom, i); return { day: d, rooms,
+        head: `<div class="colhead ${ymd(d) === todayStr ? 'today' : ''}">${d.toLocaleDateString('nl-NL', { weekday: 'short' })} ${d.getDate()}<small>${d.toLocaleDateString('nl-NL', { month: 'short' })}</small></div>` }; })
+    : rooms.map(r => ({ day: state.day, rooms: [r],
+        head: `<div class="colhead"><span class="dot" style="background:${esc(r.color)}"></span>${esc(r.name)}<small>${r.capacity ? r.capacity + ' pers.' : ''} ${esc(r.location || '')}</small></div>` }));
+
+  $('legend').innerHTML = week ? rooms.map(r => `<span><span class="dot" style="background:${esc(r.color)}"></span>${esc(r.name)}</span>`).join('') : '';
+  $('planner').classList.toggle('week', week);
+
   let html = '<div class="timecol"><div class="colhead"></div>';
   for (let h = DAY_START; h < DAY_END; h++) html += `<div class="tick">${pad(h)}:00</div>`;
   html += '</div>';
   if (!rooms.length) html += '<div style="padding:20px" class="muted">Nog geen ruimtes. Voeg ze toe onder Beheer.</div>';
-  for (const r of rooms) {
-    html += `<div class="roomcol"><div class="colhead"><span class="dot" style="background:${esc(r.color)}"></span>${esc(r.name)}<small>${r.capacity ? r.capacity + ' pers.' : ''} ${esc(r.location || '')}</small></div>`;
-    html += `<div class="slots" data-room="${r.id}" style="height:${hours * hourPx}px">`;
+
+  cols.forEach((c, ci) => {
+    const n = c.rooms.length, dayEnd = addDays(c.day, 1);
+    html += `<div class="${week ? 'daycol' : 'roomcol'}">${c.head}<div class="slots" data-col="${ci}" style="height:${hours * hourPx}px">`;
     for (let h = 0; h < hours; h++) html += `<div class="half" style="top:${h * hourPx + hourPx / 2}px"></div>`;
-    for (const b of state.bookings.filter(b => b.room_id === r.id)) {
-      const s = new Date(b.start_at), e = new Date(b.end_at);
-      const dayStartMin = DAY_START * 60, dayEndMin = DAY_END * 60;
-      const sMin = Math.max(dayStartMin, (s < state.day ? 0 : s.getHours() * 60 + s.getMinutes()));
-      const eMin = Math.min(dayEndMin, (e >= addDays(state.day, 1) ? 24 * 60 : e.getHours() * 60 + e.getMinutes()));
-      if (eMin <= dayStartMin || sMin >= dayEndMin) continue;
-      const top = (sMin - dayStartMin) * pxPerMin, height = Math.max(18, (eMin - sMin) * pxPerMin - 2);
-      const mine = b.mine;
-      html += `<div class="booking ${mine ? 'mine' : ''}" data-id="${b.id}" style="top:${top}px;height:${height}px;background:${esc(r.color)}">
-        <b>${esc(b.title)}</b>${hm(s)}–${hm(e)} · ${esc(b.organizer_name || 'Onbekend')}${b.source === 'email' ? ' ✉' : ''}</div>`;
-    }
-    if (ymd(state.day) === ymd(new Date())) {
-      const n = new Date(), nm = n.getHours() * 60 + n.getMinutes();
-      if (nm >= DAY_START * 60 && nm <= DAY_END * 60) html += `<div class="nowline" style="top:${(nm - DAY_START * 60) * pxPerMin}px"></div>`;
+    for (let i = 1; i < n; i++) html += `<div class="lanesep" style="left:${i * 100 / n}%"></div>`;
+    c.rooms.forEach((r, li) => {
+      for (const b of state.bookings.filter(b => b.room_id === r.id)) {
+        const s = new Date(b.start_at), e = new Date(b.end_at);
+        if (e <= c.day || s >= dayEnd) continue;
+        const sMin = s < c.day ? 0 : s.getHours() * 60 + s.getMinutes();
+        const eMin = e >= dayEnd ? 24 * 60 : e.getHours() * 60 + e.getMinutes();
+        const top = (sMin - DAY_START * 60) * pxPerMin, height = Math.max(18, (eMin - sMin) * pxPerMin - 2);
+        const lane = n > 1 ? `left:calc(${li * 100 / n}% + 2px);right:auto;width:calc(${100 / n}% - 4px);` : '';
+        html += `<div class="booking ${b.mine ? 'mine' : ''}" data-id="${b.id}" title="${esc(r.name)}: ${esc(b.title)} ${hm(s)}–${hm(e)} · ${esc(b.organizer_name || 'Onbekend')}" style="top:${top}px;height:${height}px;${lane}background:${esc(r.color)}">
+          <b>${esc(b.title)}</b>${hm(s)}–${hm(e)}${week ? '' : ' · ' + esc(b.organizer_name || 'Onbekend')}${b.source === 'email' ? ' ✉' : ''}</div>`;
+      }
+    });
+    if (ymd(c.day) === todayStr) {
+      const t = new Date(), nm = t.getHours() * 60 + t.getMinutes();
+      html += `<div class="nowline" style="top:${(nm - DAY_START * 60) * pxPerMin}px"></div>`;
     }
     html += '</div></div>';
-  }
+  });
   $('planner').innerHTML = html;
-  if (state.scrolledDay !== ymd(state.day)) {
-    state.scrolledDay = ymd(state.day);
-    const isToday = ymd(state.day) === ymd(new Date());
-    const h = isToday ? Math.max(0, Math.min(new Date().getHours() - 1, SCROLL_TO_HOUR)) : SCROLL_TO_HOUR;
+
+  const key = state.view + ymd(state.rangeFrom);
+  if (state.scrolledDay !== key) {
+    state.scrolledDay = key;
+    const showsToday = cols.some(c => ymd(c.day) === todayStr);
+    const h = showsToday ? Math.max(0, Math.min(new Date().getHours() - 1, SCROLL_TO_HOUR)) : SCROLL_TO_HOUR;
     $('planner').scrollTop = h * hourPx;
+    const ti = cols.findIndex(c => ymd(c.day) === todayStr);
+    const colEls = $('planner').querySelectorAll('.daycol');
+    $('planner').scrollLeft = (week && ti > 0 && colEls[ti]) ? colEls[ti].offsetLeft - colEls[0].offsetLeft : 0;
   }
+
   $('planner').querySelectorAll('.slots').forEach(col => col.addEventListener('click', (ev) => {
     const bEl = ev.target.closest('.booking');
     if (bEl) { openBooking(state.bookings.find(b => b.id === bEl.dataset.id)); return; }
-    const y = ev.clientY - col.getBoundingClientRect().top;
-    let min = DAY_START * 60 + Math.floor(y / pxPerMin / 30) * 30;
+    const c = cols[+col.dataset.col];
+    const rect = col.getBoundingClientRect();
+    const lane = Math.min(c.rooms.length - 1, Math.floor((ev.clientX - rect.left) / rect.width * c.rooms.length));
+    const min = DAY_START * 60 + Math.floor((ev.clientY - rect.top) / pxPerMin / 30) * 30;
     const endMin = (min + 60) % (24 * 60);
-    openBooking(null, { roomId: col.dataset.room, date: state.day, endDate: min + 60 >= 24 * 60 ? addDays(state.day, 1) : state.day,
+    openBooking(null, { roomId: c.rooms[lane].id, date: c.day, endDate: min + 60 >= 24 * 60 ? addDays(c.day, 1) : c.day,
       start: `${pad(Math.floor(min/60))}:${pad(min%60)}`, end: `${pad(Math.floor(endMin/60))}:${pad(endMin%60)}` });
   }));
 }
