@@ -10,6 +10,7 @@ Dit is een reserveringssite voor vergaderruimtes. Alleen projectdeelnemers die d
 
 - Inloggen: de eerste keer met een link per mail, daarna met e-mailadres en wachtwoord. Het wachtwoord stel je in via *Wachtwoord* rechtsboven.
 
+- *Toegang aanvragen*: wie geen toegang heeft, vraagt die aan op het inlogscherm. Beheerders krijgen een mail en keuren goed of af onder *Beheer*. Bij goedkeuring krijgt de aanvrager automatisch een mail. Afgewezen aanvragen worden direct verwijderd, openstaande na 30 dagen.
 - Dagplanning per ruimte: klik op een vrij tijdslot om te reserveren. Dubbele boekingen zijn onmogelijk, dat bewaakt de database zelf.
 - *Mijn reserveringen*: je eigen boekingen wijzigen of verwijderen.
 - *Ruimtes*: de e-mailadressen om de ruimtes in Outlook uit te nodigen.

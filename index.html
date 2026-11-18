@@ -131,6 +131,22 @@
       <p class="muted">Geen mail? Kijk ook in je spam. Vraag niet meteen een nieuwe code aan: elke nieuwe code maakt de vorige ongeldig.</p>
     </form>
     <div id="loginMsg"></div>
+    <p class="muted" style="margin-top:16px" id="reqLinkWrap">Nog geen toegang? <a href="#" id="reqLink">Vraag toegang aan</a></p>
+    <form id="reqForm" class="hidden" style="margin-top:6px;border-top:1px solid var(--line);padding-top:10px">
+      <h3 style="margin:6px 0 2px">Toegang aanvragen</h3>
+      <p class="muted">De beheerder krijgt je aanvraag te zien. Na goedkeuring ontvang je een mail en kun je inloggen.</p>
+      <label for="reqEmail">E-mailadres</label>
+      <input id="reqEmail" type="email" required maxlength="200" autocomplete="email">
+      <label for="reqName">Naam</label>
+      <input id="reqName" required maxlength="100" autocomplete="name">
+      <label for="reqCompany">Bedrijf</label>
+      <input id="reqCompany" maxlength="100" autocomplete="organization">
+      <label for="reqReason">Toelichting (optioneel)</label>
+      <input id="reqReason" maxlength="300" placeholder="bijv. onderaannemer heiwerk SMH">
+      <p class="muted">Je naam, bedrijf en e-mailadres worden alleen gebruikt om je aanvraag te beoordelen. Een openstaande aanvraag wordt na 30 dagen automatisch verwijderd.</p>
+      <button class="primary" type="submit" style="width:100%">Aanvraag versturen</button>
+      <div id="reqMsg"></div>
+    </form>
   </section>
 
   <section id="noaccess" class="card hidden">
@@ -198,6 +214,11 @@
 
   <!-- ADMIN -->
   <section id="tab-admin" class="tab hidden">
+    <div class="card">
+      <h3 style="margin-top:0">Toegangsaanvragen</h3>
+      <div style="overflow-x:auto"><table id="reqTable"></table></div>
+      <div id="reqAdminMsg"></div>
+    </div>
     <div class="card">
       <h3 style="margin-top:0">Projectdeelnemers</h3>
       <p class="muted">Alleen deze e-mailadressen kunnen inloggen en de ruimtes uitnodigen. Na toevoegen kan iemand direct inloggen op deze site.</p>
@@ -354,7 +375,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname }
   });
   if (error) {
-    if (/database error|niet uitgenodigd/i.test(error.message)) msg('loginMsg', 'Dit e-mailadres is niet uitgenodigd. Vraag de beheerder om je toe te voegen.');
+    if (/database error|niet uitgenodigd/i.test(error.message)) { msg('loginMsg', 'Dit e-mailadres heeft nog geen toegang. Vraag hieronder toegang aan.'); openRequest(email); }
     else if (/rate limit|security purposes/i.test(error.message)) msg('loginMsg', 'Even wachten: je hebt net al een link aangevraagd. Probeer het over een minuut opnieuw.');
     else msg('loginMsg', error.message);
     return;
@@ -371,6 +392,60 @@ $('codeForm').addEventListener('submit', async (e) => {
 
 $('logoutBtn').addEventListener('click', () => sb.auth.signOut());
 
+function openRequest(email) {
+  show('reqForm'); show('reqLinkWrap', false);
+  if (email) $('reqEmail').value = email;
+  setTimeout(() => ($('reqEmail').value ? $('reqName') : $('reqEmail')).focus(), 50);
+}
+$('reqLink').onclick = (e) => { e.preventDefault(); openRequest($('loginEmail').value.trim()); };
+$('reqForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { data, error } = await sb.rpc('request_access', {
+    p_email: $('reqEmail').value, p_name: $('reqName').value, p_company: $('reqCompany').value, p_reason: $('reqReason').value });
+  if (error) return msg('reqMsg', 'Versturen mislukt. Probeer het later opnieuw.');
+  const texts = {
+    ok: ['Aanvraag verstuurd. Je krijgt een mail zodra de beheerder je toegang heeft gegeven.', true],
+    already_requested: ['Er staat al een aanvraag open voor dit e-mailadres. Je krijgt een mail zodra die is goedgekeurd.', true],
+    already_member: ['Dit e-mailadres heeft al toegang. Log hierboven in met een inlogcode.', true],
+    invalid_email: ['Vul een geldig e-mailadres in.'],
+    invalid_name: ['Vul je naam in.'],
+    busy: ['Er staan te veel aanvragen open. Neem contact op met de beheerder.'],
+  };
+  const [t, ok] = texts[data] || ['Er ging iets mis.'];
+  msg('reqMsg', t, !!ok);
+  if (data === 'ok') e.target.querySelector('button[type=submit]').disabled = true;
+});
+
+async function refreshRequestBadge() {
+  if (!state.isAdmin) return;
+  const { data } = await sb.rpc('list_access_requests');
+  const n = (data || []).length;
+  $('adminTabBtn').textContent = n ? `Beheer (${n})` : 'Beheer';
+  return data || [];
+}
+async function renderRequests() {
+  const list = await refreshRequestBadge();
+  $('reqTable').innerHTML = list.length
+    ? '<tr><th>Naam</th><th>Bedrijf</th><th>E-mail</th><th>Toelichting</th><th>Datum</th><th></th></tr>' +
+      list.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.company)}</td><td>${esc(r.email)}</td><td class="muted">${esc(r.reason)}</td>
+        <td class="muted">${fmtShort(new Date(r.created_at))}</td>
+        <td style="white-space:nowrap"><button class="primary" data-approve="${r.id}">Goedkeuren</button> <button class="link" data-reject="${r.id}">Afwijzen</button></td></tr>`).join('')
+    : '<tr><td class="muted">Geen openstaande aanvragen.</td></tr>';
+  $('reqTable').querySelectorAll('[data-approve]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.rpc('approve_access_request', { p_id: b.dataset.approve });
+    if (error) return msg('reqAdminMsg', friendlyError(error));
+    msg('reqAdminMsg', 'Goedgekeurd. De aanvrager krijgt binnen een paar minuten een mail.', true);
+    renderAdmin();
+  });
+  $('reqTable').querySelectorAll('[data-reject]').forEach(b => b.onclick = async () => {
+    if (!confirm('Deze aanvraag afwijzen? De gegevens worden direct verwijderd; de aanvrager krijgt geen bericht.')) return;
+    const { error } = await sb.rpc('reject_access_request', { p_id: b.dataset.reject });
+    if (error) return msg('reqAdminMsg', friendlyError(error));
+    msg('reqAdminMsg', 'Afgewezen en verwijderd.', true);
+    renderRequests();
+  });
+}
+
 async function start(session) {
   state.user = session.user;
   state.email = (session.user.email || '').toLowerCase();
@@ -385,6 +460,7 @@ async function start(session) {
   show('topbar'); show('tabs');
   $('whoami').textContent = memberName(state.email);
   show('adminTabBtn', state.isAdmin);
+  refreshRequestBadge();
   switchTab('planning');
   setInterval(() => { if (!document.hidden && currentTab === 'planning') loadDay(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadDay(); });
@@ -603,6 +679,7 @@ function renderFeed() {
 
 // ===== Beheer =====
 async function renderAdmin() {
+  renderRequests();
   await loadBase();
   $('memberTable').innerHTML = '<tr><th>E-mail</th><th>Naam</th><th>Bedrijf</th><th>Beheerder</th><th></th></tr>' +
     state.members.map(m => `<tr><td>${esc(m.email)}</td><td>${esc(m.name)}</td><td>${esc(m.company)}</td>

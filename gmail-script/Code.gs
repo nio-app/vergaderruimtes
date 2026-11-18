@@ -58,6 +58,7 @@ function verwerkUitnodigingen() {
       thread.moveToTrash();
     }
     props.setProperty('verwerkt', JSON.stringify(done.slice(-400)));
+    try { stuurMeldingen(); } catch (err) { console.error('Meldingen: ' + err); }
   } finally {
     lock.releaseLock();
   }
@@ -106,6 +107,40 @@ function verwerkBericht(message, me) {
     const roomAddr = base + '+' + alias + '@' + domain;
     if (res.status === 'accepted') stuurAntwoord(ev, cal, 'ACCEPTED', res, roomAddr, organizerEmail, occurrences);
     if (res.status === 'declined') stuurAntwoord(ev, cal, 'DECLINED', res, roomAddr, organizerEmail, occurrences);
+  });
+}
+
+// ---------- Toegangsaanvragen: meldingen ----------
+/** Mailt beheerders bij een nieuwe aanvraag en de aanvrager zodra die is goedgekeurd. */
+function stuurMeldingen() {
+  const resp = UrlFetchApp.fetch(CONFIG.SUPABASE_URL + '/rest/v1/rpc/mail_queue', {
+    method: 'post', contentType: 'application/json',
+    headers: { apikey: CONFIG.SUPABASE_KEY },
+    payload: JSON.stringify({ p_secret: CONFIG.INGEST_SECRET }),
+    muteHttpExceptions: true
+  });
+  if (resp.getResponseCode() >= 300) throw new Error('mail_queue ' + resp.getResponseCode() + ': ' + resp.getContentText());
+  const q = JSON.parse(resp.getContentText());
+  const site = q.site || '';
+  const title = q.title || 'Vergaderruimtes';
+
+  if (q.new_requests.length && q.admins.length) {
+    const lijst = q.new_requests.map(r =>
+      '- ' + r.name + (r.company ? ' (' + r.company + ')' : '') + ' – ' + r.email + (r.reason ? '\n  Toelichting: ' + r.reason : '')).join('\n');
+    GmailApp.sendEmail(q.admins.join(','),
+      'Nieuwe toegangsaanvraag ' + title + ' (' + q.new_requests.length + ')',
+      'Er is een nieuwe aanvraag voor toegang tot ' + title + ':\n\n' + lijst +
+      '\n\nKeur goed of wijs af op de site onder Beheer:\n' + site +
+      '\n\nOpenstaande aanvragen worden na 30 dagen automatisch verwijderd.',
+      { name: title });
+  }
+
+  q.approved.forEach(u => {
+    GmailApp.sendEmail(u.email, 'Je hebt toegang tot ' + title,
+      'Hallo ' + u.name + ',\n\nJe aanvraag is goedgekeurd. Je kunt nu inloggen op:\n' + site +
+      '\n\nVul je e-mailadres in en klik op "Stuur inlogcode". Je krijgt dan een mail met een code.' +
+      '\n\nMet vriendelijke groet,\n' + title,
+      { name: title });
   });
 }
 
