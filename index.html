@@ -64,7 +64,7 @@
   .seg button { border: none; border-radius: 0; padding: 8px 12px; }
   .seg button.active { background: #fde8eb; color: var(--accent); font-weight: 600; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; color: var(--muted); }
-  .daycol { flex: 1 0 130px; border-right: 1px solid var(--line); }
+  .daycol { flex: 1 0 150px; border-right: 1px solid var(--line); }
   .daycol:last-child { border-right: none; }
   .daycol .colhead.today { color: var(--accent); }
   .lanesep { position: absolute; top: 0; bottom: 0; border-left: 1px dashed #eef0f3; pointer-events: none; }
@@ -177,7 +177,7 @@
     </div>
     <div class="legend" id="legend"></div>
     <div class="planner" id="planner"></div>
-    <p class="muted">Klik op een vrij tijdslot om te reserveren (in de weekweergave heeft elke ruimte een eigen strook per dag, zie de kleuren). Je kunt een ruimte ook uitnodigen vanuit Outlook via het e-mailadres van de ruimte (zie tabblad Ruimtes).</p>
+    <p class="muted">Klik op een vrij tijdslot om te reserveren (in de weekweergave heeft elke ruimte een eigen strook per dag, zie de kleuren). Het weekend staat in de dagweergave. Je kunt een ruimte ook uitnodigen vanuit Outlook via het e-mailadres van de ruimte (zie tabblad Ruimtes).</p>
   </section>
 
   <!-- MINE -->
@@ -330,6 +330,7 @@ const SUPABASE_KEY = 'sb_publishable_oXM5qHIc0RGQw1lV3F7Frw_ZyTM_ySo';
 const DAY_START = 0;   // planning loopt 24 uur
 const DAY_END = 24;
 const SCROLL_TO_HOUR = 7; // waar de planning standaard naartoe scrolt
+const WEEK_DAYS = 5;      // weekweergave: maandag t/m vrijdag (weekend via dagweergave)
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = (id) => document.getElementById(id);
@@ -531,9 +532,9 @@ async function loadDay() {
   const week = state.view === 'week';
   $('viewDay').classList.toggle('active', !week); $('viewWeek').classList.toggle('active', week);
   const from = week ? weekStart(state.day) : state.day;
-  const to = addDays(from, week ? 7 : 1);
+  const to = addDays(from, week ? WEEK_DAYS : 1);
   if (week) {
-    const last = addDays(from, 6);
+    const last = addDays(from, WEEK_DAYS - 1);
     const sameMonth = from.getMonth() === last.getMonth();
     $('dateTitle').textContent = `Week ${isoWeek(from)} · ${from.getDate()}${sameMonth ? '' : ' ' + from.toLocaleDateString('nl-NL', { month: 'short' })} – ${last.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`;
   } else {
@@ -557,7 +558,7 @@ function renderPlanner() {
 
   // kolommen: dagweergave = per ruimte; weekweergave = per dag met een strook per ruimte
   const cols = week
-    ? [...Array(7)].map((_, i) => { const d = addDays(state.rangeFrom, i); return { day: d, rooms,
+    ? [...Array(WEEK_DAYS)].map((_, i) => { const d = addDays(state.rangeFrom, i); return { day: d, rooms,
         head: `<div class="colhead ${ymd(d) === todayStr ? 'today' : ''}">${d.toLocaleDateString('nl-NL', { weekday: 'short' })} ${d.getDate()}<small>${d.toLocaleDateString('nl-NL', { month: 'short' })}</small></div>` }; })
     : rooms.map(r => ({ day: state.day, rooms: [r],
         head: `<div class="colhead"><span class="dot" style="background:${esc(r.color)}"></span>${esc(r.name)}<small>${r.capacity ? r.capacity + ' pers.' : ''} ${esc(r.location || '')}</small></div>` }));
@@ -584,7 +585,7 @@ function renderPlanner() {
         const top = (sMin - DAY_START * 60) * pxPerMin, height = Math.max(18, (eMin - sMin) * pxPerMin - 2);
         const lane = n > 1 ? `left:calc(${li * 100 / n}% + 2px);right:auto;width:calc(${100 / n}% - 4px);` : '';
         html += `<div class="booking ${b.mine ? 'mine' : ''}" data-id="${b.id}" title="${esc(r.name)}: ${esc(b.title)} ${hm(s)}–${hm(e)} · ${esc(b.organizer_name || 'Onbekend')}" style="top:${top}px;height:${height}px;${lane}background:${esc(r.color)}">
-          <b>${esc(b.title)}</b>${hm(s)}–${hm(e)}${week ? '' : ' · ' + esc(b.organizer_name || 'Onbekend')}${b.source === 'email' ? ' ✉' : ''}</div>`;
+          <b>${esc(b.title)}</b>${hm(s)}–${hm(e)}${week ? '<br>' : ' · '}${esc(b.organizer_name || 'Onbekend')}${b.source === 'email' ? ' ✉' : ''}</div>`;
       }
     });
     if (ymd(c.day) === todayStr) {
